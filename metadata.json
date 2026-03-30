@@ -1,0 +1,7 @@
+{
+  "name": "GymPulse SaaS",
+  "description": "Plataforma de Gestão para Academias e Personal Trainers com foco em multi-tenancy, treinos, evolução física e financeiro.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

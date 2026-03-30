@@ -1,0 +1,135 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasRole(roles) {
+      return isAuthenticated() && (
+        request.auth.token.email == "admin@admin.com" ||
+        (request.auth.token.email == "willianrpsdesigner@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role in roles)
+      );
+    }
+
+    function isAdmin() {
+      return hasRole(['OWNER', 'ADMIN']);
+    }
+
+    function isInstructor() {
+      return hasRole(['OWNER', 'ADMIN', 'INSTRUCTOR']);
+    }
+
+    function getTenantId() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? getUserData().tenantId : null;
+    }
+
+    function belongsToTenant(data) {
+      return isAuthenticated() && data.tenantId == getTenantId();
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidTenant(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.slug is string && data.slug.size() > 0 && data.slug.size() < 50 &&
+             data.planType in ['BASIC', 'PRO', 'ENTERPRISE'];
+    }
+
+    function isValidUser(data) {
+      return data.tenantId is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.role in ['OWNER', 'ADMIN', 'INSTRUCTOR', 'STUDENT'];
+    }
+
+    function isValidStudent(data) {
+      return data.tenantId is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.status in ['ACTIVE', 'INACTIVE', 'SUSPENDED', 'DEFAULTING'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /tenants/{tenantId} {
+      allow read: if isAuthenticated() && (isAdmin() || getTenantId() == tenantId);
+      allow create: if isAuthenticated() && isValidTenant(request.resource.data);
+      allow update: if isAuthenticated() && isAdmin() && isValidTenant(request.resource.data);
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || (isInstructor() && getTenantId() == resource.data.tenantId));
+      allow create: if isAuthenticated() && (isAdmin() || isOwner(userId)) && isValidUser(request.resource.data);
+      allow update: if isAuthenticated() && (isAdmin() || isOwner(userId)) && isValidUser(request.resource.data);
+    }
+
+    match /students/{studentId} {
+      allow read: if isAuthenticated() && (
+        (isInstructor() && belongsToTenant(resource.data)) || 
+        isOwner(resource.data.userId) ||
+        (resource.data.accessId != null && resource.data.userId == null)
+      );
+      allow create: if isAuthenticated() && isInstructor() && belongsToTenant(request.resource.data) && isValidStudent(request.resource.data);
+      allow update: if isAuthenticated() && (
+        (isInstructor() && belongsToTenant(request.resource.data)) ||
+        (resource.data.userId == null && request.resource.data.userId == request.auth.uid && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userId', 'updatedAt']))
+      ) && isValidStudent(request.resource.data);
+    }
+
+    match /plans/{planId} {
+      allow read: if isAuthenticated() && belongsToTenant(resource.data);
+      allow write: if isAuthenticated() && isAdmin() && belongsToTenant(request.resource.data);
+    }
+
+    match /checkins/{checkinId} {
+      allow read: if isAuthenticated() && belongsToTenant(resource.data);
+      allow create: if isAuthenticated() && isInstructor() && belongsToTenant(request.resource.data);
+    }
+
+    match /evolution_records/{recordId} {
+      allow read: if isAuthenticated() && (
+        (isInstructor() && belongsToTenant(resource.data)) || 
+        (exists(/databases/$(database)/documents/students/$(resource.data.studentId)) && 
+         get(/databases/$(database)/documents/students/$(resource.data.studentId)).data.userId == request.auth.uid)
+      );
+      allow create: if isAuthenticated() && isInstructor() && belongsToTenant(request.resource.data);
+    }
+
+    match /workoutTemplates/{templateId} {
+      allow read: if isAuthenticated() && belongsToTenant(resource.data);
+      allow write: if isAuthenticated() && isInstructor() && belongsToTenant(request.resource.data);
+    }
+
+    match /trainingPlans/{planId} {
+      allow read: if isAuthenticated() && (
+        (isInstructor() && belongsToTenant(resource.data)) || 
+        isOwner(resource.data.studentUserId)
+      );
+      allow write: if isAuthenticated() && isInstructor() && belongsToTenant(request.resource.data);
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated() && (
+        (isAdmin() && belongsToTenant(resource.data)) || 
+        (exists(/databases/$(database)/documents/students/$(resource.data.studentId)) && 
+         get(/databases/$(database)/documents/students/$(resource.data.studentId)).data.userId == request.auth.uid)
+      );
+      allow write: if isAuthenticated() && isAdmin() && belongsToTenant(request.resource.data);
+    }
+  }
+}
