@@ -9,6 +9,8 @@ export function useDashboardStats(tenantId: string | undefined) {
     totalStudents: 0,
     checkinsToday: 0,
     monthlyRevenue: 0,
+    pendingAmount: 0,
+    overdueAmount: 0,
     retentionRate: 0,
     recentCheckins: [] as any[],
     newStudents: [] as Student[],
@@ -75,9 +77,21 @@ export function useDashboardStats(tenantId: string | undefined) {
       }
 
       // Payments & Revenue
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const monthlyRevenue = payments
-        .filter(p => p.status === 'PAID' && p.paidAt && p.paidAt.toMillis() >= monthStart)
+        .filter(p => {
+          if (p.status !== 'PAID' || !p.paidAt) return false;
+          const date = typeof p.paidAt.toDate === 'function' ? p.paidAt.toDate() : new Date(p.paidAt);
+          return date >= monthStart;
+        })
+        .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
+      const pendingAmount = payments
+        .filter(p => p.status === 'PENDING')
+        .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
+      const overdueAmount = payments
+        .filter(p => p.status === 'OVERDUE')
         .reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
       // Revenue Chart (Last 7 days)
@@ -91,7 +105,8 @@ export function useDashboardStats(tenantId: string | undefined) {
         const rev = payments
           .filter(p => p.status === 'PAID' && p.paidAt)
           .filter(p => {
-            const time = p.paidAt.toMillis();
+            const date = typeof p.paidAt.toDate === 'function' ? p.paidAt.toDate() : new Date(p.paidAt);
+            const time = date.getTime();
             return time >= dayStart && time < dayEnd;
           })
           .reduce((acc, curr) => acc + (curr.amount || 0), 0);
@@ -104,6 +119,8 @@ export function useDashboardStats(tenantId: string | undefined) {
         totalStudents,
         checkinsToday: checkinsTodayCount,
         monthlyRevenue,
+        pendingAmount,
+        overdueAmount,
         retentionRate,
         recentCheckins,
         newStudents,

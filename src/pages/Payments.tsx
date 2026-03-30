@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   DollarSign, 
   Search, 
@@ -99,6 +99,44 @@ export default function Payments() {
     return students.find(s => s.id === studentId)?.name || 'Aluno não encontrado';
   };
 
+  const stats = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const monthlyRevenue = payments
+      .filter(p => {
+        if (p.status !== 'PAID' || !p.paidAt) return false;
+        const date = typeof p.paidAt.toDate === 'function' ? p.paidAt.toDate() : new Date(p.paidAt);
+        return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+      })
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    const pendingAmount = payments
+      .filter(p => p.status === 'PENDING')
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    const overdueAmount = payments
+      .filter(p => p.status === 'OVERDUE')
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    const monthlyPayments = payments.filter(p => {
+      const date = typeof p.dueDate === 'string' ? new Date(p.dueDate) : (p.dueDate as any).toDate?.() || new Date(p.dueDate);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    });
+
+    const paidThisMonth = monthlyPayments.filter(p => p.status === 'PAID').length;
+    const totalThisMonth = monthlyPayments.length;
+    const complianceRate = totalThisMonth > 0 ? Math.round((paidThisMonth / totalThisMonth) * 100) : 100;
+
+    return {
+      monthlyRevenue,
+      pendingAmount,
+      overdueAmount,
+      complianceRate
+    };
+  }, [payments]);
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'PAID':
@@ -150,7 +188,6 @@ export default function Payments() {
         </div>
       </header>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card p-4 flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-brand-green/10 flex items-center justify-center text-brand-green">
@@ -158,7 +195,7 @@ export default function Payments() {
           </div>
           <div>
             <p className="text-xs text-brand-muted uppercase tracking-wider">Receita Mensal</p>
-            <p className="text-xl font-bold text-brand-text">R$ 12.450,00</p>
+            <p className="text-xl font-bold text-brand-text">{formatCurrency(stats.monthlyRevenue)}</p>
           </div>
         </div>
         <div className="card p-4 flex items-center gap-4">
@@ -167,7 +204,7 @@ export default function Payments() {
           </div>
           <div>
             <p className="text-xs text-brand-muted uppercase tracking-wider">Pendentes</p>
-            <p className="text-xl font-bold text-brand-text">R$ 2.180,00</p>
+            <p className="text-xl font-bold text-brand-text">{formatCurrency(stats.pendingAmount)}</p>
           </div>
         </div>
         <div className="card p-4 flex items-center gap-4">
@@ -176,7 +213,7 @@ export default function Payments() {
           </div>
           <div>
             <p className="text-xs text-brand-muted uppercase tracking-wider">Atrasados</p>
-            <p className="text-xl font-bold text-brand-text">R$ 850,00</p>
+            <p className="text-xl font-bold text-brand-text">{formatCurrency(stats.overdueAmount)}</p>
           </div>
         </div>
         <div className="card p-4 flex items-center gap-4">
@@ -185,7 +222,7 @@ export default function Payments() {
           </div>
           <div>
             <p className="text-xs text-brand-muted uppercase tracking-wider">Taxa de Adimplência</p>
-            <p className="text-xl font-bold text-brand-text">94%</p>
+            <p className="text-xl font-bold text-brand-text">{stats.complianceRate}%</p>
           </div>
         </div>
       </div>

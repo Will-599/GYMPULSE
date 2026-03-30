@@ -1,8 +1,63 @@
-import React from 'react';
 import { CalendarCheck, Search, QrCode, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useAuthStore } from '../store/authStore';
+import { useStudentStore } from '../store/studentStore';
+import { useCheckinStore } from '../store/checkinStore';
+import toast from 'react-hot-toast';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export default function Checkin() {
+  const { tenant } = useAuthStore();
+  const { students, fetchStudents } = useStudentStore();
+  const { checkins, loading, fetchTodayCheckins, addCheckin } = useCheckinStore();
+  const [searchTerm, setSearchTerm] = React.useState('');
+
+  React.useEffect(() => {
+    if (tenant) {
+      const unsubCheckins = fetchTodayCheckins(tenant.id);
+      const unsubStudents = fetchStudents(tenant.id);
+      return () => {
+        unsubCheckins();
+        unsubStudents();
+      };
+    }
+  }, [tenant, fetchTodayCheckins, fetchStudents]);
+
+  const handleManualCheckin = async () => {
+    if (!searchTerm) {
+      toast.error('Informe o CPF ou Matrícula');
+      return;
+    }
+
+    const student = students.find(s => 
+      s.cpf?.replace(/\D/g, '') === searchTerm.replace(/\D/g, '') || 
+      s.accessId === searchTerm
+    );
+
+    if (!student) {
+      toast.error('Aluno não encontrado');
+      return;
+    }
+
+    if (!student.accessGranted || student.status !== 'ACTIVE') {
+      toast.error('Acesso bloqueado. Verifique o status do aluno.');
+      return;
+    }
+
+    try {
+      await addCheckin({
+        tenantId: tenant!.id,
+        studentId: student.id,
+        method: 'MANUAL',
+      });
+      toast.success(`Check-in realizado: ${student.name}`);
+      setSearchTerm('');
+    } catch (error) {
+      toast.error('Erro ao realizar check-in');
+    }
+  };
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -34,11 +89,19 @@ export default function Checkin() {
                   <input
                     type="text"
                     className="input-field w-full pl-10"
-                    placeholder="000.000.000-00"
+                    placeholder="000.000.000-00 ou ID"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleManualCheckin()}
                   />
                 </div>
               </div>
-              <button className="btn-primary w-full">Confirmar Entrada</button>
+              <button 
+                onClick={handleManualCheckin}
+                className="btn-primary w-full"
+              >
+                Confirmar Entrada
+              </button>
             </div>
           </div>
 
@@ -58,25 +121,47 @@ export default function Checkin() {
               Frequência de Hoje
             </h3>
             <div className="space-y-4">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="flex items-center justify-between p-4 rounded-lg border border-brand-border bg-brand-black/30 group hover:border-brand-green/30 transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-brand-border flex items-center justify-center text-brand-muted overflow-hidden">
-                      <CalendarCheck size={24} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-brand-text">Aluno Exemplo {i}</p>
-                      <p className="text-xs text-brand-muted">Plano Black • Entrada às 14:3{i}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-green-500 flex items-center gap-1">
-                      <CheckCircle2 size={14} />
-                      Autorizado
-                    </span>
-                  </div>
-                </div>
-              ))}
+              {loading ? (
+                <p className="text-center text-brand-muted py-8 italic">Carregando frequência...</p>
+              ) : checkins.length === 0 ? (
+                <p className="text-center text-brand-muted py-8 italic">Nenhum check-in realizado hoje.</p>
+              ) : (
+                checkins.map((checkin) => {
+                  const student = students.find(s => s.id === checkin.studentId);
+                  const checkinDate = typeof checkin.checkinAt?.toDate === 'function' ? checkin.checkinAt.toDate() : new Date(checkin.checkinAt);
+                  
+                  return (
+                    <motion.div 
+                      key={checkin.id} 
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="flex items-center justify-between p-4 rounded-lg border border-brand-border bg-brand-black/30 group hover:border-brand-green/30 transition-all"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-brand-border flex items-center justify-center text-brand-muted overflow-hidden">
+                          {student?.photoUrl ? (
+                            <img src={student.photoUrl} alt={student.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <CalendarCheck size={24} />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-brand-text">{student?.name || 'Carregando...'}</p>
+                          <p className="text-xs text-brand-muted">
+                            {student?.planId || 'Plano'} • Entrada às {format(checkinDate, 'HH:mm', { locale: ptBR })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-green-500 flex items-center gap-1">
+                          <CheckCircle2 size={14} />
+                          Autorizado
+                        </span>
+                      </div>
+                    </motion.div>
+                  );
+                })
+              )}
             </div>
             <button className="w-full mt-6 text-sm text-brand-muted hover:text-brand-green transition-colors font-medium">
               Ver histórico completo
