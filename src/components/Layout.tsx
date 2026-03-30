@@ -31,7 +31,7 @@ const navItems = [
 ];
 
 export default function Layout() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
   const { user, tenant, logout } = useAuthStore();
   const navigate = useNavigate();
 
@@ -45,20 +45,30 @@ export default function Layout() {
   };
 
   return (
-    <div className="flex h-screen bg-brand-black overflow-hidden">
+    <div className="flex h-screen bg-brand-black overflow-hidden relative">
+      {/* Mobile Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-brand-black/80 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
       {/* Sidebar */}
       <aside 
         className={cn(
-          "bg-brand-dark border-r border-brand-border transition-all duration-300 flex flex-col z-30",
-          isSidebarOpen ? "w-64" : "w-20"
+          "fixed inset-y-0 left-0 bg-brand-dark border-r border-brand-border transition-all duration-300 flex flex-col z-50 lg:static lg:translate-x-0",
+          isSidebarOpen ? "translate-x-0 w-64" : "-translate-x-full w-64 lg:translate-x-0 lg:w-20"
         )}
       >
         <div className="p-6 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-brand-green text-brand-black flex items-center justify-center flex-shrink-0">
             <Dumbbell size={20} />
           </div>
-          {isSidebarOpen && (
-            <span className="font-bold text-xl tracking-tight text-brand-text truncate">GymPulse</span>
+          {(isSidebarOpen || window.innerWidth >= 1024) && (
+            <span className={cn(
+              "font-bold text-xl tracking-tight text-brand-text truncate",
+              !isSidebarOpen && "lg:hidden"
+            )}>GymPulse</span>
           )}
         </div>
 
@@ -80,8 +90,11 @@ export default function Layout() {
                     : "text-brand-muted hover:bg-brand-border hover:text-brand-text"
                 )}
               >
-                <item.icon size={22} />
-                {isSidebarOpen && <span className="truncate">{item.label}</span>}
+                <item.icon size={22} className="flex-shrink-0" />
+                <span className={cn(
+                  "truncate",
+                  !isSidebarOpen && "lg:hidden"
+                )}>{item.label}</span>
                 {!isSidebarOpen && (
                   <div className="absolute left-16 bg-brand-dark border border-brand-border px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                     {item.label}
@@ -100,8 +113,11 @@ export default function Layout() {
               !isSidebarOpen && "justify-center"
             )}
           >
-            <LogOut size={22} />
-            {isSidebarOpen && <span>Sair</span>}
+            <LogOut size={22} className="flex-shrink-0" />
+            <span className={cn(
+              "truncate",
+              !isSidebarOpen && "lg:hidden"
+            )}>Sair</span>
           </button>
         </div>
       </aside>
@@ -109,13 +125,25 @@ export default function Layout() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
         {/* Header */}
-        <header className="h-16 bg-brand-dark border-b border-brand-border flex items-center justify-between px-6 z-20">
-          <button 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 rounded-lg hover:bg-brand-border text-brand-muted transition-colors"
-          >
-            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
+        <header className="h-16 bg-brand-dark border-b border-brand-border flex items-center justify-between px-4 sm:px-6 z-20">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2 rounded-lg hover:bg-brand-border text-brand-muted transition-colors lg:hidden"
+            >
+              <Menu size={20} />
+            </button>
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2 rounded-lg hover:bg-brand-border text-brand-muted transition-colors hidden lg:block"
+            >
+              {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+            <div className="lg:hidden w-8 h-8 rounded-lg bg-brand-green text-brand-black flex items-center justify-center">
+              <Dumbbell size={18} />
+            </div>
+            <h2 className="text-lg font-bold text-brand-text lg:hidden">GymPulse</h2>
+          </div>
 
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
@@ -133,7 +161,7 @@ export default function Layout() {
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-6 bg-brand-black">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-brand-black">
           <Outlet />
         </div>
       </main>

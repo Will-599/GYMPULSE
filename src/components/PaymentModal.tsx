@@ -100,9 +100,9 @@ export default function PaymentModal({ isOpen, onClose, payment }: PaymentModalP
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="bg-brand-black border border-brand-border w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden"
+            className="bg-brand-black border border-brand-border w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden m-4"
           >
-            <div className="p-6 border-b border-brand-border flex items-center justify-between bg-brand-black/50">
+            <div className="p-4 sm:p-6 border-b border-brand-border flex items-center justify-between bg-brand-black/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-brand-green/10 flex items-center justify-center text-brand-green">
                   <DollarSign size={20} />
@@ -119,7 +119,7 @@ export default function PaymentModal({ isOpen, onClose, payment }: PaymentModalP
               </button>
             </div>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="p-4 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-brand-muted uppercase tracking-wider flex items-center gap-2">
                   <User size={14} /> Aluno
