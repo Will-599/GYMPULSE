@@ -11,6 +11,11 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
+// Log only if apiKey is missing to help with debugging
+if (!firebaseConfig.apiKey) {
+  console.warn('Firebase API Key missing! Check environment variables in Netlify/Local.');
+}
+
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || '(default)');
+export const db = getFirestore(app, import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || 'ai-studio-775a853d-0b18-43b4-aa26-5e1b6298d1ff');
 export const auth = getAuth(app);
