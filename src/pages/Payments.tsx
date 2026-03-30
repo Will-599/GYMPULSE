@@ -106,8 +106,13 @@ export default function Payments() {
 
     const monthlyRevenue = payments
       .filter(p => {
-        if (p.status !== 'PAID' || !p.paidAt) return false;
-        const date = typeof p.paidAt.toDate === 'function' ? p.paidAt.toDate() : new Date(p.paidAt);
+        if (p.status !== 'PAID') return false;
+        
+        // Fallback to dueDate if paidAt is missing
+        const dateRaw = p.paidAt || p.dueDate;
+        if (!dateRaw) return false;
+
+        const date = typeof dateRaw.toDate === 'function' ? dateRaw.toDate() : new Date(dateRaw);
         return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
       })
       .reduce((sum, p) => sum + p.amount, 0);

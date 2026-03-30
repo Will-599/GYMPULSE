@@ -70,12 +70,17 @@ export default function PaymentModal({ isOpen, onClose, payment }: PaymentModalP
     if (!tenant) return;
 
     try {
+      const paymentData = {
+        ...data,
+        paidAt: data.status === 'PAID' ? new Date().toISOString() : null,
+      };
+
       if (payment?.id) {
-        await updatePayment(payment.id, data);
+        await updatePayment(payment.id, paymentData);
         toast.success('Pagamento atualizado com sucesso!');
       } else {
         await addPayment({
-          ...data,
+          ...paymentData,
           tenantId: tenant.id,
           planId: '', // Optional for now
         });

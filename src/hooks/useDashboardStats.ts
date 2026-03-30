@@ -80,8 +80,10 @@ export function useDashboardStats(tenantId: string | undefined) {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const monthlyRevenue = payments
         .filter(p => {
-          if (p.status !== 'PAID' || !p.paidAt) return false;
-          const date = typeof p.paidAt.toDate === 'function' ? p.paidAt.toDate() : new Date(p.paidAt);
+          if (p.status !== 'PAID') return false;
+          const dateRaw = p.paidAt || p.dueDate;
+          if (!dateRaw) return false;
+          const date = typeof dateRaw.toDate === 'function' ? dateRaw.toDate() : new Date(dateRaw);
           return date >= monthStart;
         })
         .reduce((acc, curr) => acc + (curr.amount || 0), 0);
@@ -103,9 +105,11 @@ export function useDashboardStats(tenantId: string | undefined) {
         const dayEnd = dayStart + 86400000;
         
         const rev = payments
-          .filter(p => p.status === 'PAID' && p.paidAt)
+          .filter(p => p.status === 'PAID')
           .filter(p => {
-            const date = typeof p.paidAt.toDate === 'function' ? p.paidAt.toDate() : new Date(p.paidAt);
+            const dateRaw = p.paidAt || p.dueDate;
+            if (!dateRaw) return false;
+            const date = typeof dateRaw.toDate === 'function' ? dateRaw.toDate() : new Date(dateRaw);
             const time = date.getTime();
             return time >= dayStart && time < dayEnd;
           })
