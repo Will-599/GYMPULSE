@@ -40,7 +40,7 @@ export default function Login() {
     try {
       await login(data.email, data.password);
       toast.success('Bem-vindo ao GymPulse!');
-      navigate('/app/dashboard');
+      // Let the useEffect handle redirection to avoid DOM conflicts
     } catch (error: any) {
       console.error('Login error:', error);
       if (error.code === 'auth/operation-not-allowed') {
