@@ -39,7 +39,7 @@ export default function StudentLogin() {
     try {
       await login(data.email, data.password);
       toast.success('Login realizado com sucesso!');
-      navigate('/student/dashboard');
+      // Redirection will be handled by the useEffect above once user state is populated
     } catch (error: any) {
       console.error('Login error:', error);
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {

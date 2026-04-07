@@ -41,33 +41,26 @@ export default function StudentRegister() {
 
   const onSubmit = async (data: RegisterFormData) => {
     setLoading(true);
-    try {
-      // 1. Create Firebase User first so we are authenticated
-      const { user: firebaseUser } = await createUserWithEmailAndPassword(auth, data.email, data.password);
+    let firebaseUser: any = null;
+    let currentStep = 0;
 
-      // 2. Check if accessId is valid
+    try {
+      currentStep = 1; // Auth Creation
+      const authResult = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      firebaseUser = authResult.user;
+
+      // Small delay to ensure auth token is fully synced before next Firestore call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      currentStep = 2; // Student Record Lookup
       const studentsRef = collection(db, 'students');
-      const q = query(studentsRef, where('accessId', '==', data.accessId.toUpperCase()));
+      const q = query(studentsRef, where('accessId', '==', data.accessId.toUpperCase().trim()));
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
-        // If invalid, we have a user but no profile. 
-        // We should probably delete the user or just let them try again later (link academy)
-        toast.error('ID da academia inválido. Você pode vincular sua conta depois no painel.');
-        
-        // Create a basic user profile without tenantId for now (or with a placeholder)
-        const userData = {
-          id: firebaseUser.uid,
-          tenantId: '', // Not linked yet
-          name: data.name,
-          email: data.email,
-          role: 'STUDENT',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        await setDoc(doc(db, 'users', firebaseUser.uid), userData);
-        navigate('/student/dashboard');
+        await firebaseUser.delete();
+        toast.error('ID da academia inválido ou não encontrado.');
+        setLoading(false);
         return;
       }
 
@@ -75,24 +68,21 @@ export default function StudentRegister() {
       const studentData = studentDoc.data();
 
       if (studentData.userId) {
-        toast.error('Este código de acesso já foi utilizado');
-        // Still create the profile but unlinked
-        const userData = {
-          id: firebaseUser.uid,
-          tenantId: '',
-          name: data.name,
-          email: data.email,
-          role: 'STUDENT',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        await setDoc(doc(db, 'users', firebaseUser.uid), userData);
-        navigate('/student/dashboard');
+        await firebaseUser.delete();
+        toast.error('Este código de acesso já foi utilizado por outra conta.');
+        setLoading(false);
         return;
       }
 
-      // 3. Create User Profile linked to tenant
+      // Verify if email matches (security measure)
+      if (studentData.email.toLowerCase().trim() !== data.email.toLowerCase().trim()) {
+        await firebaseUser.delete();
+        toast.error('O e-mail informado não corresponde ao cadastro desta academia.');
+        setLoading(false);
+        return;
+      }
+
+      currentStep = 3; // User Profile Creation
       const userData = {
         id: firebaseUser.uid,
         tenantId: studentData.tenantId,
@@ -106,7 +96,7 @@ export default function StudentRegister() {
 
       await setDoc(doc(db, 'users', firebaseUser.uid), userData);
 
-      // 4. Link Student record to User
+      currentStep = 4; // Student Record Linking
       await updateDoc(doc(db, 'students', studentDoc.id), {
         userId: firebaseUser.uid,
         updatedAt: new Date(),
@@ -116,10 +106,18 @@ export default function StudentRegister() {
       navigate('/student/dashboard');
     } catch (error: any) {
       console.error('Registration error:', error);
+      
+      // Cleanup account if something failed during the half-created state
+      if (firebaseUser && !loading) {
+        try { await firebaseUser.delete(); } catch (e) {}
+      }
+
       if (error.code === 'auth/email-already-in-use') {
-        toast.error('Este e-mail já está em uso');
+        toast.error('Este e-mail já está em uso por outra conta.');
+      } else if (error.code === 'auth/weak-password') {
+        toast.error('A senha é muito fraca. Use pelo menos 6 caracteres.');
       } else {
-        toast.error('Erro ao realizar cadastro');
+        toast.error('Ocorreu um erro ao vincular sua conta. Verifique o ID da academia e tente novamente.');
       }
     } finally {
       setLoading(false);

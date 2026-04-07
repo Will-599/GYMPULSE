@@ -97,12 +97,13 @@ export default function AddStudentModal({ isOpen, onClose, onSuccess, student }:
         toast.success('Aluno atualizado com sucesso!');
       } else {
         // Create new student
-        const accessId = data.accessGranted ? generateAccessId() : null;
+        const accessId = generateAccessId();
         
         const studentData = {
           ...data,
           tenantId: tenant.id,
           accessId,
+          userId: null, // Explicitly null for security rules matching
           qrCode: Math.random().toString(36).substring(7), // Mock QR code
           status: 'ACTIVE',
           isDeleted: false,
@@ -112,10 +113,10 @@ export default function AddStudentModal({ isOpen, onClose, onSuccess, student }:
 
         await addDoc(collection(db, 'students'), studentData);
         
-        toast.success('Aluno cadastrado com sucesso!');
-        if (accessId) {
-          toast.success(`Código de acesso gerado: ${accessId}`, { duration: 6000 });
-        }
+        toast.success(`Aluno cadastrado! Código: ${accessId}`, { 
+          duration: 10000,
+          icon: '🔑'
+        });
       }
       
       onSuccess();

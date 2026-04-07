@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { useStudentStore } from '../store/studentStore';
+import { useCheckinStore } from '../store/checkinStore';
 import { 
   LayoutDashboard, 
   Users, 
@@ -14,16 +16,18 @@ import {
   User as UserIcon,
   ChevronRight,
   Trash2,
-  Building2
+  Building2,
+  QrCode
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import QrScanner from './QrScanner';
 
 const navItems = [
   { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/app/tenants', label: 'Academias', icon: Building2 },
   { path: '/app/students', label: 'Alunos', icon: Users },
-  { path: '/app/checkin', label: 'Check-in', icon: CalendarCheck },
+  { path: '/app/check-in', label: 'Check-in', icon: CalendarCheck },
   { path: '/app/workouts', label: 'Treinos', icon: Dumbbell },
   { path: '/app/payments', label: 'Financeiro', icon: CreditCard },
   { path: '/app/trash', label: 'Lixeira', icon: Trash2 },
@@ -32,8 +36,18 @@ const navItems = [
 
 export default function Layout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const { user, tenant, logout } = useAuthStore();
+  const { students, fetchStudents } = useStudentStore();
+  const { validateAndCheckin } = useCheckinStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (tenant) {
+      const unsub = fetchStudents(tenant.id);
+      return () => unsub();
+    }
+  }, [tenant, fetchStudents]);
 
   const handleLogout = async () => {
     try {
@@ -41,6 +55,14 @@ export default function Layout() {
       navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);
+    }
+  };
+
+  const handleQrSuccess = async (decodedText: string) => {
+    if (!tenant) return;
+    const success = await validateAndCheckin(tenant.id, decodedText, students, 'QR_CODE');
+    if (success) {
+      setIsScannerOpen(false);
     }
   };
 
@@ -146,6 +168,17 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Quick Check-in Button */}
+            {tenant?.id !== 'master-tenant' && (
+              <button
+                onClick={() => setIsScannerOpen(true)}
+                className="hidden sm:flex items-center gap-2 bg-brand-green/10 text-brand-green px-4 py-2 rounded-xl border border-brand-green/20 hover:bg-brand-green/20 transition-all font-bold text-sm"
+              >
+                <QrCode size={18} />
+                Scan Check-in
+              </button>
+            )}
+
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-brand-text">{user?.name || 'Usuário'}</p>
               <p className="text-xs text-brand-muted uppercase tracking-wider">{tenant?.name || 'Academia'}</p>
@@ -165,6 +198,47 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+
+      {/* QR Scanner Modal (Academy Side) */}
+      <AnimatePresence>
+        {isScannerOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-brand-black/90 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-brand-dark w-full max-w-lg rounded-3xl border border-brand-border p-6 shadow-2xl relative overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-brand-text flex items-center gap-2">
+                    <QrCode className="text-brand-green" size={24} />
+                    Check-in Rápido
+                  </h3>
+                  <p className="text-xs text-brand-muted">Aponte a câmera para o QR Code do aluno</p>
+                </div>
+                <button 
+                  onClick={() => setIsScannerOpen(false)}
+                  className="p-2 text-brand-muted hover:text-brand-text transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <QrScanner 
+                onScanSuccess={handleQrSuccess}
+                onScanError={(err) => console.log('Scanner error:', err)}
+              />
+
+              <div className="mt-6 p-4 bg-brand-green/5 border border-brand-green/20 rounded-xl text-center">
+                <p className="text-xs text-brand-green font-medium">
+                  Acesso será validado automaticamente com base no status e financeiro.
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

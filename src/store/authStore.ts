@@ -110,22 +110,24 @@ export const useAuthStore = create<AuthState>((set) => ({
             const userData = { ...userDoc.data(), id: userDoc.id } as User;
             set({ user: userData });
             
-            // Listen to tenant changes
-            const tenantPath = `tenants/${userData.tenantId}`;
-            onSnapshot(doc(db, 'tenants', userData.tenantId), (tenantDoc) => {
-              if (tenantDoc.exists()) {
-                const currentTenant = useAuthStore.getState().tenant;
-                const newData = { ...tenantDoc.data(), id: tenantDoc.id } as Tenant;
-                
-                // Only update if data actually changed to prevent redundant re-renders
-                if (JSON.stringify(currentTenant) !== JSON.stringify(newData)) {
-                  set({ tenant: newData });
+            // Listen to tenant changes if tenantId exists
+            if (userData.tenantId) {
+              const tenantPath = `tenants/${userData.tenantId}`;
+              onSnapshot(doc(db, 'tenants', userData.tenantId), (tenantDoc) => {
+                if (tenantDoc.exists()) {
+                  const currentTenant = useAuthStore.getState().tenant;
+                  const newData = { ...tenantDoc.data(), id: tenantDoc.id } as Tenant;
+                  
+                  // Only update if data actually changed to prevent redundant re-renders
+                  if (JSON.stringify(currentTenant) !== JSON.stringify(newData)) {
+                    set({ tenant: newData });
+                  }
                 }
-              }
-            }, (error) => {
-              console.error('Error fetching tenant:', error);
-              handleFirestoreError(error, OperationType.GET, tenantPath);
-            });
+              }, (error) => {
+                console.error('Error fetching tenant:', error);
+                handleFirestoreError(error, OperationType.GET, tenantPath);
+              });
+            }
 
             // If student, listen to student data for access control
             if (userData.role === 'STUDENT') {
@@ -192,9 +194,13 @@ export const useAuthStore = create<AuthState>((set) => ({
             }
             
             set({ user: userData, tenant: tenantData });
+          } else {
+            // Profile missing for non-admin email
+            set({ user: null, tenant: null, student: null });
           }
         } catch (error) {
           console.error('Auth initialization error:', error);
+          set({ user: null, tenant: null, student: null });
         }
       } else {
         set({ user: null, tenant: null, student: null });

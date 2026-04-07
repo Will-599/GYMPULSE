@@ -31,7 +31,7 @@ export default function LinkAcademy() {
 
     try {
       const studentsRef = collection(db, 'students');
-      const q = query(studentsRef, where('accessId', '==', data.accessId.toUpperCase()));
+      const q = query(studentsRef, where('accessId', '==', data.accessId.toUpperCase().trim()));
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
@@ -44,7 +44,12 @@ export default function LinkAcademy() {
       const studentData = studentDoc.data();
 
       if (studentData.userId) {
-        toast.error('Este código de acesso já foi utilizado');
+        if (studentData.userId === user.id) {
+          toast.success('Esta academia já está vinculada à sua conta!');
+          navigate('/student/dashboard');
+          return;
+        }
+        toast.error('Este código de acesso já foi utilizado por outra conta');
         setLoading(false);
         return;
       }

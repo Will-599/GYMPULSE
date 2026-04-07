@@ -8,8 +8,11 @@ import {
   Menu,
   X,
   User as UserIcon,
-  LayoutDashboard
+  LayoutDashboard,
+  QrCode
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
 const navItems = [
@@ -20,6 +23,7 @@ const navItems = [
 
 export default function StudentLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const { user, tenant, logout } = useAuthStore();
   const navigate = useNavigate();
 
@@ -81,6 +85,24 @@ export default function StudentLayout() {
               )}>{item.label}</span>
             </NavLink>
           ))}
+
+          {/* Quick Check-in Button */}
+          <button
+            onClick={() => {
+              setIsQrModalOpen(true);
+              setIsSidebarOpen(false);
+            }}
+            className={cn(
+              "flex items-center gap-3 w-full px-3 py-3 rounded-lg text-brand-green hover:bg-brand-green/10 transition-all group",
+              !isSidebarOpen && "lg:justify-center"
+            )}
+          >
+            <QrCode size={22} />
+            <span className={cn(
+              "truncate font-semibold text-sm",
+              !isSidebarOpen && "lg:hidden"
+            )}>Check-in QR</span>
+          </button>
         </nav>
 
         <div className="p-4 border-t border-brand-border">
@@ -137,6 +159,63 @@ export default function StudentLayout() {
           <Outlet />
         </div>
       </main>
+
+      {/* QR Code Modal */}
+      <AnimatePresence>
+        {isQrModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-brand-black/90 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-brand-dark w-full max-w-sm rounded-3xl border border-brand-border p-8 shadow-2xl text-center relative overflow-hidden"
+            >
+              {/* Decorative background elements */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-brand-green/10 blur-3xl -mr-16 -mt-16 rounded-full" />
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-brand-green/5 blur-3xl -ml-16 -mb-16 rounded-full" />
+
+              <button 
+                onClick={() => setIsQrModalOpen(false)}
+                className="absolute top-4 right-4 p-2 text-brand-muted hover:text-brand-text transition-colors"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="relative z-10">
+                <div className="inline-flex p-3 rounded-2xl bg-brand-green/10 text-brand-green mb-6">
+                  <QrCode size={32} />
+                </div>
+                
+                <h3 className="text-2xl font-bold text-brand-text mb-2">Check-in QR</h3>
+                <p className="text-brand-muted text-sm mb-8">Apresente este código na recepção para liberar sua entrada.</p>
+
+                <div className="bg-white p-6 rounded-2xl inline-block shadow-lg shadow-black/50 mb-8">
+                  <QRCodeSVG 
+                    value={user?.id || ''} 
+                    size={200}
+                    level="H"
+                    includeMargin={false}
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="p-4 bg-brand-black/40 rounded-xl border border-brand-border">
+                    <p className="text-xs text-brand-muted uppercase tracking-widest mb-1 font-bold">Identificador Único</p>
+                    <p className="text-brand-text font-mono text-sm uppercase break-all">{user?.id}</p>
+                  </div>
+
+                  <button
+                    onClick={() => setIsQrModalOpen(false)}
+                    className="btn-primary w-full py-4 text-base"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

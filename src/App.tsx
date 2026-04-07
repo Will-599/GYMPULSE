@@ -24,7 +24,7 @@ import AccessPending from './pages/AccessPending';
 import { Toaster } from 'react-hot-toast';
 
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading, initialized } = useAuthStore();
+  const { user, tenant, loading, initialized } = useAuthStore();
 
   if (!initialized || loading) {
     return (
@@ -44,7 +44,7 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
 
   // Check tenant activation (Master is always active)
   const isMaster = user.email === 'admin@admin.com';
-  if (!isMaster && useAuthStore.getState().tenant?.isActive === false) {
+  if (!isMaster && tenant?.isActive === false) {
     return <Navigate to="/pending" />;
   }
 
@@ -52,7 +52,7 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const StudentPrivateRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading, initialized } = useAuthStore();
+  const { user, student, loading, initialized } = useAuthStore();
 
   if (!initialized || loading) {
     return (
@@ -71,8 +71,20 @@ const StudentPrivateRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   // Check student access release
-  if (user.role === 'STUDENT' && useAuthStore.getState().student?.accessGranted === false) {
-    return <Navigate to="/pending" />;
+  if (user.role === 'STUDENT') {
+    // If student data is still null but we are initialized and user exists, 
+    // it means it's still being fetched from the snapshot. We should wait.
+    if (!student) {
+      return (
+        <div className="min-h-screen bg-brand-black flex items-center justify-center">
+          <div className="w-12 h-12 border-4 border-brand-green border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+
+    if (student.accessGranted === false) {
+      return <Navigate to="/pending" />;
+    }
   }
 
   if (user.role !== 'STUDENT') {
@@ -119,7 +131,7 @@ export default function App() {
           <Route index element={<Navigate to="/app/dashboard" />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="students" element={<Students />} />
-          <Route path="checkin" element={<Checkin />} />
+          <Route path="check-in" element={<Checkin />} />
           <Route path="workouts" element={<Workouts />} />
           <Route path="payments" element={<Payments />} />
           <Route path="tenants" element={<Tenants />} />
