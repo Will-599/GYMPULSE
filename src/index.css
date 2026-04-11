@@ -34,4 +34,34 @@
   .card {
     @apply bg-brand-dark border border-brand-border rounded-xl p-6;
   }
+  
+  .print-only {
+    display: none;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  body, html, main {
+    background: white !important;
+    color: black !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  * {
+    color: black !important;
+    border-color: #e5e7eb !important;
+  }
+  .print-break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .print-page-break {
+    page-break-before: always;
+  }
 }

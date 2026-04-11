@@ -118,18 +118,18 @@ export default function StudentEvolution() {
             <div className="card p-4 flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <div className="w-8 h-8 rounded-full bg-brand-green/10 flex items-center justify-center text-brand-green">
-                  <TrendingUp size={18} />
+                  <Activity size={18} />
                 </div>
-                {lastRecord && previousRecord && (
-                  <div className={`flex items-center gap-0.5 text-xs font-bold ${getDiff(lastRecord.muscleMassPercent, previousRecord.muscleMassPercent)?.color}`}>
-                    {React.createElement(getDiff(lastRecord.muscleMassPercent, previousRecord.muscleMassPercent)!.icon, { size: 12 })}
-                    {getDiff(lastRecord.muscleMassPercent, previousRecord.muscleMassPercent)?.val}%
-                  </div>
-                )}
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-brand-muted">Massa Muscular</p>
-                <p className="text-2xl font-bold text-brand-text">{lastRecord.muscleMassPercent}%</p>
+                <p className="text-[10px] uppercase tracking-wider text-brand-muted flex items-center gap-1">
+                  IMC <span className="text-[10px] font-normal opacity-50">(Altura: {lastRecord.height || '--'}cm)</span>
+                </p>
+                <p className="text-2xl font-bold text-brand-text">
+                  {lastRecord.weight && lastRecord.height 
+                    ? (lastRecord.weight / ((lastRecord.height/100) * (lastRecord.height/100))).toFixed(1) 
+                    : '--'}
+                </p>
               </div>
             </div>
 

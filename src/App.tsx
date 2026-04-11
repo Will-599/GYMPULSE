@@ -20,6 +20,7 @@ import LinkAcademy from './pages/LinkAcademy';
 import StudentDashboard from './pages/StudentDashboard';
 import StudentWorkouts from './pages/StudentWorkouts';
 import StudentEvolution from './pages/StudentEvolution';
+import Evolution from './pages/Evolution';
 import AccessPending from './pages/AccessPending';
 import { Toaster } from 'react-hot-toast';
 
@@ -134,6 +135,7 @@ export default function App() {
           <Route path="check-in" element={<Checkin />} />
           <Route path="workouts" element={<Workouts />} />
           <Route path="payments" element={<Payments />} />
+          <Route path="evolution" element={<Evolution />} />
           <Route path="tenants" element={<Tenants />} />
           <Route path="trash" element={<TrashBin />} />
           <Route path="settings" element={<Settings />} />

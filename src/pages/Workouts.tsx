@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { useWorkoutStore } from '../store/workoutStore';
 import { useStudentStore } from '../store/studentStore';
 import TrainingModal from '../components/TrainingModal';
+import TimerModal from '../components/TimerModal';
 import { TrainingPlan } from '../types';
 import toast from 'react-hot-toast';
 
@@ -17,6 +18,7 @@ export default function Workouts() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Partial<TrainingPlan> | undefined>(undefined);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isTimerOpen, setIsTimerOpen] = useState(false);
 
   useEffect(() => {
     if (tenant) {
@@ -209,8 +211,11 @@ export default function Workouts() {
                     <Edit2 size={16} />
                     Editar Plano
                   </button>
-                  <button className="btn-secondary px-3 py-2">
-                    <Play size={16} />
+                  <button 
+                    onClick={() => setIsTimerOpen(true)}
+                    className="btn-secondary px-6 py-2 flex items-center justify-center hover:border-brand-green/50 transition-colors"
+                  >
+                    <Clock size={20} className="text-brand-green" />
                   </button>
                 </div>
               </motion.div>
@@ -277,6 +282,10 @@ export default function Workouts() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         initialData={editingPlan}
+      />
+      <TimerModal
+        isOpen={isTimerOpen}
+        onClose={() => setIsTimerOpen(false)}
       />
     </div>
   );

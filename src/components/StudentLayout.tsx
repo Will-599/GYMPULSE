@@ -49,8 +49,8 @@ export default function StudentLayout() {
       {/* Sidebar */}
       <aside 
         className={cn(
-          "fixed inset-y-0 left-0 bg-brand-dark border-r border-brand-border transition-all duration-300 flex flex-col z-50 lg:static lg:translate-x-0",
-          isSidebarOpen ? "translate-x-0 w-64" : "-translate-x-full w-64 lg:w-20"
+          "fixed inset-y-0 left-0 bg-brand-dark border-r border-brand-border transition-all duration-300 flex flex-col z-50 lg:static lg:translate-x-0 no-print",
+          isSidebarOpen ? "translate-x-0 w-64" : "-translate-x-full w-64 lg:translate-x-0 lg:w-20"
         )}
       >
         <div className="p-6 flex items-center gap-3">
@@ -123,9 +123,9 @@ export default function StudentLayout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
+      <main className="flex-1 flex flex-col overflow-hidden relative print:bg-white print:overflow-visible">
         {/* Header */}
-        <header className="h-16 bg-brand-dark border-b border-brand-border flex items-center justify-between px-4 sm:px-6 z-20">
+        <header className="h-16 bg-brand-dark border-b border-brand-border flex items-center justify-between px-4 sm:px-6 z-20 no-print">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -155,7 +155,7 @@ export default function StudentLayout() {
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-brand-black">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-brand-black print:bg-white print:overflow-visible print:p-0">
           <Outlet />
         </div>
       </main>

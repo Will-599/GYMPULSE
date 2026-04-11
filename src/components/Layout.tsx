@@ -17,7 +17,8 @@ import {
   ChevronRight,
   Trash2,
   Building2,
-  QrCode
+  QrCode,
+  TrendingUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -29,6 +30,7 @@ const navItems = [
   { path: '/app/students', label: 'Alunos', icon: Users },
   { path: '/app/check-in', label: 'Check-in', icon: CalendarCheck },
   { path: '/app/workouts', label: 'Treinos', icon: Dumbbell },
+  { path: '/app/evolution', label: 'Acompanhamento', icon: TrendingUp },
   { path: '/app/payments', label: 'Financeiro', icon: CreditCard },
   { path: '/app/trash', label: 'Lixeira', icon: Trash2 },
   { path: '/app/settings', label: 'Configurações', icon: Settings },
@@ -78,7 +80,7 @@ export default function Layout() {
       {/* Sidebar */}
       <aside 
         className={cn(
-          "fixed inset-y-0 left-0 bg-brand-dark border-r border-brand-border transition-all duration-300 flex flex-col z-50 lg:static lg:translate-x-0",
+          "fixed inset-y-0 left-0 bg-brand-dark border-r border-brand-border transition-all duration-300 flex flex-col z-50 lg:static lg:translate-x-0 no-print",
           isSidebarOpen ? "translate-x-0 w-64" : "-translate-x-full w-64 lg:translate-x-0 lg:w-20"
         )}
       >
@@ -145,9 +147,9 @@ export default function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
+      <main className="flex-1 flex flex-col overflow-hidden relative print:bg-white print:overflow-visible">
         {/* Header */}
-        <header className="h-16 bg-brand-dark border-b border-brand-border flex items-center justify-between px-4 sm:px-6 z-20">
+        <header className="h-16 bg-brand-dark border-b border-brand-border flex items-center justify-between px-4 sm:px-6 z-20 no-print">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -194,7 +196,7 @@ export default function Layout() {
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-brand-black">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-brand-black print:bg-white print:overflow-visible print:p-0">
           <Outlet />
         </div>
       </main>
