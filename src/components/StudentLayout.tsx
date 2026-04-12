@@ -24,7 +24,7 @@ const navItems = [
 export default function StudentLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
-  const { user, tenant, logout } = useAuthStore();
+  const { user, tenant, student, logout } = useAuthStore();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -191,7 +191,7 @@ export default function StudentLayout() {
 
                 <div className="bg-white p-6 rounded-2xl inline-block shadow-lg shadow-black/50 mb-8">
                   <QRCodeSVG 
-                    value={user?.id || ''} 
+                    value={student?.id || user?.id || ''} 
                     size={200}
                     level="H"
                     includeMargin={false}
@@ -201,7 +201,7 @@ export default function StudentLayout() {
                 <div className="space-y-4">
                   <div className="p-4 bg-brand-black/40 rounded-xl border border-brand-border">
                     <p className="text-xs text-brand-muted uppercase tracking-widest mb-1 font-bold">Identificador Único</p>
-                    <p className="text-brand-text font-mono text-sm uppercase break-all">{user?.id}</p>
+                    <p className="text-brand-text font-mono text-sm uppercase break-all">{student?.id || user?.id}</p>
                   </div>
 
                   <button

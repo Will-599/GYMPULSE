@@ -32,9 +32,12 @@ export default function QrScanner({
       if (!stopped) {
         stopped = true;
         if (scannerRef.current && scannerRef.current.isScanning) {
-          scannerRef.current.stop().then(() => {
-            scannerRef.current?.clear();
-          }).catch(err => console.error("Failed to stop scanner", err));
+          try {
+            // Pauasar leitura previne múltiplas chamadas sem fechar o stream
+            scannerRef.current.pause(true);
+          } catch(e) {
+            // Ignorar erro se a versão não suportar pause
+          }
         }
         onScanSuccess(decodedText);
       }
@@ -64,18 +67,19 @@ export default function QrScanner({
     return () => {
       stopped = true;
       if (scannerRef.current) {
-        if (scannerRef.current.isScanning) {
-          scannerRef.current.stop().then(() => {
-            scannerRef.current?.clear();
-            scannerRef.current = null;
+        const scanner = scannerRef.current;
+        if (scanner.isScanning) {
+          scanner.stop().then(() => {
+            scanner.clear();
           }).catch(error => {
             console.error("Failed to stop html5Qrcode.", error);
-            scannerRef.current = null;
           });
         } else {
-          scannerRef.current.clear();
-          scannerRef.current = null;
+          try {
+            scanner.clear();
+          } catch (e) {}
         }
+        scannerRef.current = null;
       }
     };
   }, [onScanSuccess, onScanError, fps, qrbox]);

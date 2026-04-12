@@ -28,6 +28,7 @@ export const useCheckinStore = create<CheckinState>((set) => ({
       // 1. Find student locally or in provided list
       let student = students.find(s => 
         s.id === studentIdOrAccessId || 
+        s.userId === studentIdOrAccessId ||
         s.accessId === studentIdOrAccessId ||
         (s.cpf?.replace(/\D/g, '') === studentIdOrAccessId.replace(/\D/g, ''))
       );

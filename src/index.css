@@ -16,6 +16,26 @@
   body {
     @apply bg-brand-black text-brand-text antialiased;
   }
+
+  /* Custom Scrollbar for modern look */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-brand-border rounded-full hover:bg-brand-muted transition-colors;
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  /* For Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-brand-border) transparent;
+  }
 }
 
 @layer components {
