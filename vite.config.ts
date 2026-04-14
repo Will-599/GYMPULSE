@@ -8,13 +8,8 @@ export default defineConfig(({mode}) => {
   return {
     plugins: [react(), tailwindcss()],
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      ...Object.keys(env).reduce((prev, key) => {
-        if (key.startsWith('VITE_')) {
-          prev[`import.meta.env.${key}`] = JSON.stringify(env[key]);
-        }
-        return prev;
-      }, {}),
+      // GEMINI_API_KEY was removed from here to prevent frontend data leaks.
+      // Use Backend/Edge Functions for private API keys.
     },
     resolve: {
       alias: {

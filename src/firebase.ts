@@ -8,6 +8,14 @@ const getEnv = (key: string) => {
   return value.replace(/['"]+/g, '').trim();
 };
 
+/**
+ * FIREBASE SECURITY NOTE:
+ * These configuration values are public and exposed in the frontend bundle.
+ * This is normal for Firebase. Security is NOT enforced by hiding these keys,
+ * but through Firestore Security Rules and App Check.
+ * 
+ * Ensure your firestore.rules are strict and restrict access properly.
+ */
 const firebaseConfig = {
   apiKey: getEnv('VITE_FIREBASE_API_KEY'),
   authDomain: getEnv('VITE_FIREBASE_AUTH_DOMAIN'),
