@@ -39,7 +39,7 @@ export const useCheckinStore = create<CheckinState>((set) => ({
       }
 
       // 2. Check Status
-      if (!student.accessGranted || student.status !== 'ACTIVE') {
+      if (student.status !== 'ACTIVE') {
         toast.error(`ACESSO NEGADO: ${student.name} está inativo ou suspenso.`, { duration: 5000 });
         return false;
       }

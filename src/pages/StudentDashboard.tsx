@@ -7,24 +7,26 @@ import {
   Activity, 
   Weight, 
   Clock,
-  ArrowUpRight
+  ArrowUpRight,
+  Utensils
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuthStore } from '../store/authStore';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
-import { TrainingPlan, EvolutionRecord } from '../types';
+import { TrainingPlan, EvolutionRecord, DietPlan } from '../types';
 import { formatDate } from '../lib/utils';
 import { Link } from 'react-router-dom';
 
 export default function StudentDashboard() {
-  const { user, tenant } = useAuthStore();
+  const { user, tenant, student } = useAuthStore();
   const [currentWorkout, setCurrentWorkout] = useState<TrainingPlan | null>(null);
   const [lastEvolution, setLastEvolution] = useState<EvolutionRecord | null>(null);
+  const [currentDiet, setCurrentDiet] = useState<DietPlan | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || !tenant) return;
+    if (!user || !tenant || !student) return;
 
     const fetchData = async () => {
       try {
@@ -44,13 +46,26 @@ export default function StudentDashboard() {
         // 2. Fetch last evolution record
         const evolutionQuery = query(
           collection(db, 'evolution_records'),
-          where('studentId', '==', user.id),
+          where('studentId', '==', student.id),
           orderBy('recordedAt', 'desc'),
           limit(1)
         );
         const evolutionSnap = await getDocs(evolutionQuery);
         if (!evolutionSnap.empty) {
           setLastEvolution({ ...evolutionSnap.docs[0].data(), id: evolutionSnap.docs[0].id } as EvolutionRecord);
+        }
+
+        // 3. Fetch current diet plan
+        const dietQuery = query(
+          collection(db, 'diet_plans'),
+          where('studentId', '==', student.id),
+          where('isDeleted', '==', false),
+          orderBy('createdAt', 'desc'),
+          limit(1)
+        );
+        const dietSnap = await getDocs(dietQuery);
+        if (!dietSnap.empty) {
+          setCurrentDiet({ ...dietSnap.docs[0].data(), id: dietSnap.docs[0].id } as DietPlan);
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -60,7 +75,7 @@ export default function StudentDashboard() {
     };
 
     fetchData();
-  }, [user, tenant]);
+  }, [user, tenant, student]);
 
   const getTodayWorkout = () => {
     if (!currentWorkout) return null;
@@ -129,33 +144,78 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <div className="card p-4 flex flex-col items-center justify-center text-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-brand-border flex items-center justify-center text-brand-muted">
-                <Calendar size={20} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="card p-4 flex flex-col items-center justify-center text-center gap-2">
+                <div className="w-10 h-10 rounded-full bg-brand-border flex items-center justify-center text-brand-muted">
+                  <Calendar size={20} />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-brand-muted">Frequência</p>
+                  <p className="text-lg font-bold text-brand-text">12 dias</p>
+                </div>
               </div>
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-brand-muted">Frequência</p>
-                <p className="text-lg font-bold text-brand-text">12 dias</p>
+              <div className="card p-4 flex flex-col items-center justify-center text-center gap-2">
+                <div className="w-10 h-10 rounded-full bg-brand-border flex items-center justify-center text-brand-muted">
+                  <Clock size={20} />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-brand-muted">Tempo Médio</p>
+                  <p className="text-lg font-bold text-brand-text">55 min</p>
+                </div>
+              </div>
+              <div className="card p-4 flex flex-col items-center justify-center text-center gap-2 col-span-2">
+                <div className="w-10 h-10 rounded-full bg-brand-border flex items-center justify-center text-brand-muted">
+                  <Weight size={20} />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-brand-muted">Último Peso</p>
+                  <p className="text-lg font-bold text-brand-text">{lastEvolution?.weight ? `${lastEvolution.weight} kg` : '--'}</p>
+                </div>
               </div>
             </div>
-            <div className="card p-4 flex flex-col items-center justify-center text-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-brand-border flex items-center justify-center text-brand-muted">
-                <Clock size={20} />
-              </div>
+
+            {/* Diet Plan Card */}
+            <div className="card p-6 bg-brand-black/40 border-brand-border flex flex-col justify-between">
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-brand-muted">Tempo Médio</p>
-                <p className="text-lg font-bold text-brand-text">55 min</p>
-              </div>
-            </div>
-            <div className="card p-4 flex flex-col items-center justify-center text-center gap-2 col-span-2 sm:col-span-1">
-              <div className="w-10 h-10 rounded-full bg-brand-border flex items-center justify-center text-brand-muted">
-                <Weight size={20} />
-              </div>
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-brand-muted">Último Peso</p>
-                <p className="text-lg font-bold text-brand-text">{lastEvolution?.weight ? `${lastEvolution.weight} kg` : '--'}</p>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2 text-brand-green">
+                    <Utensils size={18} />
+                    <span className="text-xs font-bold uppercase tracking-wider">Sua Dieta</span>
+                  </div>
+                  {currentDiet && (
+                    <Link to="/student/evolution?tab=nutrition" className="text-[10px] text-brand-muted hover:text-brand-green uppercase font-bold tracking-widest">
+                      Ver Detalhes
+                    </Link>
+                  )}
+                </div>
+
+                {currentDiet ? (
+                  <div>
+                    <h3 className="text-xl font-bold text-brand-text mb-1">{currentDiet.mealsPerDay} Refeições/dia</h3>
+                    <p className="text-xs text-brand-muted mb-4">Última atualização: {formatDate(currentDiet.updatedAt)}</p>
+                    <div className="space-y-2">
+                      {currentDiet.meals?.sort((a, b) => a.time.localeCompare(b.time)).slice(0, 2).map((meal) => (
+                        <div key={meal.id} className="flex items-center justify-between text-xs py-1 border-b border-brand-border/50 last:border-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-brand-green font-bold">{meal.time}</span>
+                            <span className="text-brand-text">{meal.name}</span>
+                          </div>
+                          <span className="text-brand-muted text-[10px]">{meal.foods.length} itens</span>
+                        </div>
+                      ))}
+                      {currentDiet.meals && currentDiet.meals.length > 2 && (
+                        <p className="text-[10px] text-brand-muted text-center pt-1">+ {currentDiet.meals.length - 2} refeições adicionais</p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center py-4">
+                    <Utensils size={32} className="text-brand-border mb-2 opacity-50" />
+                    <p className="text-sm text-brand-muted">Nenhuma dieta prescrita.</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

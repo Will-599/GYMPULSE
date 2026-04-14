@@ -30,6 +30,43 @@ export default function Checkin() {
     }
   }, [tenant, fetchTodayCheckins, fetchStudents]);
 
+  // Global keydown listener for hardware QR scanners (like turnstiles)
+  React.useEffect(() => {
+    let buffer = '';
+    let timeout: NodeJS.Timeout;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only listen if they aren't typing in an input
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if (e.key === 'Enter') {
+        if (buffer.length > 0) {
+          validateAndCheckinLocal(buffer, true);
+          buffer = '';
+        }
+      } else {
+        // Only accept readable characters
+        if (e.key.length === 1) {
+          buffer += e.key;
+        }
+        
+        // Clear buffer if typing is too slow (not a scanner)
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          buffer = '';
+        }, 100); // 100ms max between keystrokes for hardware scanner
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      clearTimeout(timeout);
+    };
+  }, [tenant, students]);
+
   const validateAndCheckinLocal = async (studentIdOrAccessId: string, isFromQr = false) => {
     if (!tenant) return;
     setValidating(true);

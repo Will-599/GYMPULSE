@@ -1,35 +1,60 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, RotateCcw, Users, Dumbbell, Search, Filter, AlertCircle, CreditCard } from 'lucide-react';
+import { Trash2, RotateCcw, Users, Dumbbell, Search, Filter, AlertCircle, CreditCard, Utensils, Activity } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuthStore } from '../store/authStore';
 import { useStudentStore } from '../store/studentStore';
 import { useWorkoutStore } from '../store/workoutStore';
 import { usePaymentStore } from '../store/paymentStore';
+import { db } from '../firebase';
+import { collection, query, where, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 
-type TrashCategory = 'students' | 'plans' | 'templates' | 'payments';
+type TrashCategory = 'students' | 'plans' | 'templates' | 'payments' | 'nutrition' | 'evolution';
 
 export default function TrashBin() {
   const { tenant } = useAuthStore();
-  const { trashedStudents, fetchTrashedStudents, restoreStudent } = useStudentStore();
+  const { students, fetchStudents, trashedStudents, fetchTrashedStudents, restoreStudent } = useStudentStore();
   const { trashedPlans, fetchTrashedPlans, restorePlan, trashedTemplates, fetchTrashedTemplates, restoreTemplate } = useWorkoutStore();
   const { trashedPayments, fetchTrashedPayments, restorePayment } = usePaymentStore();
   
   const [activeCategory, setActiveCategory] = useState<TrashCategory>('students');
   const [searchTerm, setSearchTerm] = useState('');
+  const [trashedDiets, setTrashedDiets] = useState<any[]>([]);
+  const [trashedEvolutions, setTrashedEvolutions] = useState<any[]>([]);
 
   useEffect(() => {
     if (tenant) {
+      fetchStudents(tenant.id);
       const unsubStudents = fetchTrashedStudents(tenant.id);
       const unsubPlans = fetchTrashedPlans(tenant.id);
       const unsubTemplates = fetchTrashedTemplates(tenant.id);
       const unsubPayments = fetchTrashedPayments(tenant.id);
+      
+      const qDiets = query(
+        collection(db, 'diet_plans'),
+        where('tenantId', '==', tenant.id),
+        where('isDeleted', '==', true)
+      );
+      const unsubDiets = onSnapshot(qDiets, (snap) => {
+        setTrashedDiets(snap.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+      });
+
+      const qEvolutions = query(
+        collection(db, 'evolution_records'),
+        where('tenantId', '==', tenant.id),
+        where('isDeleted', '==', true)
+      );
+      const unsubEvolutions = onSnapshot(qEvolutions, (snap) => {
+        setTrashedEvolutions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+      });
       
       return () => {
         unsubStudents();
         unsubPlans();
         unsubTemplates();
         unsubPayments();
+        unsubDiets();
+        unsubEvolutions();
       };
     }
   }, [tenant, fetchTrashedStudents, fetchTrashedPlans, fetchTrashedTemplates, fetchTrashedPayments]);
@@ -40,6 +65,18 @@ export default function TrashBin() {
       else if (category === 'plans') await restorePlan(id);
       else if (category === 'templates') await restoreTemplate(id);
       else if (category === 'payments') await restorePayment(id);
+      else if (category === 'nutrition') {
+        await updateDoc(doc(db, 'diet_plans', id), {
+          isDeleted: false,
+          deletedAt: null
+        });
+      }
+      else if (category === 'evolution') {
+        await updateDoc(doc(db, 'evolution_records', id), {
+          isDeleted: false,
+          deletedAt: null
+        });
+      }
       
       toast.success('Item restaurado com sucesso!');
     } catch (error) {
@@ -53,6 +90,22 @@ export default function TrashBin() {
     else if (activeCategory === 'plans') items = trashedPlans;
     else if (activeCategory === 'templates') items = trashedTemplates;
     else if (activeCategory === 'payments') items = trashedPayments;
+    else if (activeCategory === 'nutrition') {
+      items = trashedDiets.map(diet => ({
+        ...diet,
+        name: `Dieta: ${diet.mealsPerDay} ref/dia`,
+        description: `Refeições: ${diet.meals?.map((m: any) => m.name).join(', ')}`
+      }));
+    } else if (activeCategory === 'evolution') {
+      items = trashedEvolutions.map(ev => {
+        const student = students.find(s => s.id === ev.studentId);
+        return {
+          ...ev,
+          name: `Avaliação: ${student?.name || 'Aluno desconhecido'}`,
+          description: `Peso: ${ev.weight}kg | BF: ${ev.bodyFatPercent}%`
+        };
+      });
+    }
 
     return items.filter(item => {
       const search = searchTerm.toLowerCase();
@@ -105,6 +158,24 @@ export default function TrashBin() {
           <CreditCard size={16} />
           Pagamentos ({trashedPayments.length})
         </button>
+        <button
+          onClick={() => setActiveCategory('nutrition')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+            activeCategory === 'nutrition' ? 'bg-brand-green text-brand-black' : 'text-brand-muted hover:text-brand-text'
+          }`}
+        >
+          <Utensils size={16} />
+          Nutrição ({trashedDiets.length})
+        </button>
+        <button
+          onClick={() => setActiveCategory('evolution')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+            activeCategory === 'evolution' ? 'bg-brand-green text-brand-black' : 'text-brand-muted hover:text-brand-text'
+          }`}
+        >
+          <Activity size={16} />
+          Evolução ({trashedEvolutions.length})
+        </button>
       </div>
 
       {/* Search */}
@@ -154,7 +225,8 @@ export default function TrashBin() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm text-brand-muted">
-                        {item.deletedAt?.toDate ? item.deletedAt.toDate().toLocaleString('pt-BR') : 'Data desconhecida'}
+                        {item.deletedAt?.toDate ? item.deletedAt.toDate().toLocaleString('pt-BR') : 
+                         (item.deletedAt instanceof Date ? item.deletedAt.toLocaleString('pt-BR') : 'Data desconhecida')}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">

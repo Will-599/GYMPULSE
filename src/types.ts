@@ -103,6 +103,8 @@ export interface EvolutionRecord {
   photos: { url: string; label: string; takenAt: any }[];
   observations?: string;
   recordedBy: string;
+  isDeleted?: boolean;
+  deletedAt?: any;
 }
 
 export interface Exercise {
@@ -192,3 +194,30 @@ export interface Payment {
   isDeleted?: boolean;
   deletedAt?: any;
 }
+
+export interface DietFood {
+  id: string;
+  name: string;
+  quantity: string;
+}
+
+export interface DietMeal {
+  id: string;
+  name: string; // e.g., "Almoço", "Café da Manhã"
+  time: string; // e.g., "08:00"
+  foods: DietFood[];
+}
+
+export interface DietPlan {
+  id: string;
+  tenantId: string;
+  studentId: string;
+  mealsPerDay: number;
+  meals: DietMeal[];
+  recordedBy: string;
+  createdAt: any;
+  updatedAt: any;
+  isDeleted?: boolean;
+  deletedAt?: any;
+}
+

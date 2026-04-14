@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, Plus, Search, Activity, User, FileText, X, Save, Calendar } from 'lucide-react';
+import { 
+  TrendingUp, Plus, Search, Activity, User, 
+  FileText, X, Save, Calendar, Utensils, 
+  Pencil, Trash2, RefreshCw, Trash, ArrowLeft, FileDown 
+} from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuthStore } from '../store/authStore';
 import { useStudentStore } from '../store/studentStore';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { EvolutionRecord } from '../types';
 import { formatDate } from '../lib/utils';
 import toast from 'react-hot-toast';
+import NutritionPanel from '../components/NutritionPanel';
 
 export default function Evolution() {
   const { tenant, user } = useAuthStore();
@@ -18,12 +25,28 @@ export default function Evolution() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'evolution' | 'nutrition'>('evolution');
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form State
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
   const [bodyFat, setBodyFat] = useState('');
+  const [muscleMass, setMuscleMass] = useState('');
+  
+  // Measurements State
+  const [measurements, setMeasurements] = useState({
+    chest: '',
+    waist: '',
+    hips: '',
+    leftArm: '',
+    rightArm: '',
+    leftThigh: '',
+    rightThigh: '',
+    leftCalf: '',
+    rightCalf: ''
+  });
   
   const fetchRecords = async () => {
     if (!tenant) return;
@@ -35,7 +58,9 @@ export default function Evolution() {
         orderBy('recordedAt', 'desc')
       );
       const snap = await getDocs(q);
-      const recordsData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as EvolutionRecord));
+      const recordsData = snap.docs
+        .map(doc => ({ ...doc.data(), id: doc.id } as EvolutionRecord))
+        .filter(record => (record as any).isDeleted !== true);
       setRecords(recordsData);
     } catch (error) {
       console.error('Error fetching evolution records:', error);
@@ -48,7 +73,7 @@ export default function Evolution() {
     if (tenant) {
       fetchRecords();
     }
-  }, [tenant]);
+  }, [tenant, activeTab]);
 
   // Enhance records with student names dynamically
   const enhancedRecords = records.map(record => ({
@@ -60,44 +85,77 @@ export default function Evolution() {
     record.studentName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleEdit = (record: EvolutionRecord) => {
+    setEditingId(record.id);
+    setSelectedStudentId(record.studentId);
+    setWeight(record.weight?.toString() || '');
+    setHeight(record.height?.toString() || '');
+    setBodyFat(record.bodyFatPercent?.toString() || '');
+    setMuscleMass(record.muscleMassPercent?.toString() || '');
+    setMeasurements({
+      chest: record.measurements?.chest?.toString() || '',
+      waist: record.measurements?.waist?.toString() || '',
+      hips: record.measurements?.hips?.toString() || '',
+      leftArm: record.measurements?.leftArm?.toString() || '',
+      rightArm: record.measurements?.rightArm?.toString() || '',
+      leftThigh: record.measurements?.leftThigh?.toString() || '',
+      rightThigh: record.measurements?.rightThigh?.toString() || '',
+      leftCalf: record.measurements?.leftCalf?.toString() || '',
+      rightCalf: record.measurements?.rightCalf?.toString() || ''
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSoftDelete = async (id: string, restore = false) => {
+    try {
+      const recordRef = doc(db, 'evolution_records', id);
+      await updateDoc(recordRef, {
+        isDeleted: !restore,
+        deletedAt: restore ? null : serverTimestamp()
+      });
+      toast.success(restore ? 'Avaliação restaurada!' : 'Avaliação movida para a lixeira');
+      fetchRecords();
+    } catch (error) {
+      console.error('Error updating delete status:', error);
+      toast.error('Erro ao processar solicitação.');
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenant || !user) return;
     if (!selectedStudentId || !weight || !height || !bodyFat) {
-      toast.error('Preencha todos os campos obrigatórios.');
+      toast.error('Preencha os campos obrigatórios (Peso, Altura, BF%).');
       return;
     }
 
     setSubmitting(true);
     try {
-      const weightNum = parseFloat(weight);
-      const heightNum = parseFloat(height);
-      const bfNum = parseFloat(bodyFat);
-      
-      // Optional: calculate muscle mass roughly if wanted, or leave it. We'll leave it empty for now, student screen shows it if available.
-      // But let's calculate BMI just for display in records list
-      
       const recordData = {
         tenantId: tenant.id,
         studentId: selectedStudentId,
-        recordedAt: serverTimestamp(),
-        weight: weightNum,
-        height: heightNum,
-        bodyFatPercent: bfNum,
+        recordedAt: editingId ? records.find(r => r.id === editingId)?.recordedAt : serverTimestamp(),
+        weight: parseFloat(weight),
+        height: parseFloat(height),
+        bodyFatPercent: parseFloat(bodyFat),
+        muscleMassPercent: muscleMass ? parseFloat(muscleMass) : null,
         recordedBy: user.id,
-        measurements: {} // Empty measurements as they were not required, but structure expects it
+        isDeleted: false,
+        measurements: Object.fromEntries(
+          Object.entries(measurements).map(([key, val]) => [key, val ? parseFloat(val) : null])
+        )
       };
 
-      await addDoc(collection(db, 'evolution_records'), recordData);
-      toast.success('Avaliação registrada com sucesso!');
+      if (editingId) {
+        await updateDoc(doc(db, 'evolution_records', editingId), recordData);
+        toast.success('Avaliação atualizada com sucesso!');
+      } else {
+        await addDoc(collection(db, 'evolution_records'), recordData);
+        toast.success('Avaliação registrada com sucesso!');
+      }
       
-      setIsModalOpen(false);
-      setSelectedStudentId('');
-      setWeight('');
-      setHeight('');
-      setBodyFat('');
-      
-      fetchRecords(); // refresh list
+      handleCloseModal();
+      fetchRecords();
     } catch (error) {
       console.error('Error saving record:', error);
       toast.error('Erro ao salvar avaliação.');
@@ -106,23 +164,113 @@ export default function Evolution() {
     }
   };
 
+  const downloadEvolutionPDF = (record: EvolutionRecord & { studentName?: string }) => {
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      
+      // Header
+      doc.setFillColor(0, 0, 0);
+      doc.rect(0, 0, pageWidth, 40, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
+      doc.text('GYMPULSE - Histórico de Evolução', 20, 25);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Aluno: ${record.studentName || 'Não identificado'}`, 20, 35);
+
+      // Table Data
+      const tableData = [[
+        formatDate(record.recordedAt),
+        `${record.weight || '--'}kg`,
+        `${record.bodyFatPercent || '--'}%`,
+        `${record.muscleMassPercent || '--'}%`,
+        `${record.measurements?.chest || '--'}cm`,
+        `${record.measurements?.waist || '--'}cm`,
+        `${record.measurements?.hips || '--'}cm`,
+        `${record.measurements?.rightArm || '-'}/${record.measurements?.leftArm || '-'}`,
+        `${record.measurements?.rightThigh || '-'}/${record.measurements?.leftThigh || '-'}`
+      ]];
+
+      autoTable(doc, {
+        startY: 50,
+        head: [['Data', 'Peso', 'Gordura %', 'Massa %', 'Tórax', 'Cintura', 'Quadril', 'Braços (D/E)', 'Coxas (D/E)']],
+        body: tableData,
+        headStyles: { fillColor: [0, 255, 0], textColor: [0, 0, 0], fontStyle: 'bold' },
+        theme: 'striped',
+        margin: { left: 10, right: 10 },
+        styles: { fontSize: 8 }
+      });
+
+      doc.save(`Evolucao_${(record.studentName || 'Aluno').replace(/\s+/g, '_')}_${formatDate(record.recordedAt)}.pdf`);
+      toast.success('PDF da Avaliação gerado com sucesso!');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Erro ao gerar PDF da avaliação.');
+    }
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingId(null);
+    setSelectedStudentId('');
+    setWeight('');
+    setHeight('');
+    setBodyFat('');
+    setMuscleMass('');
+    setMeasurements({
+      chest: '', waist: '', hips: '',
+      leftArm: '', rightArm: '',
+      leftThigh: '', rightThigh: '',
+      leftCalf: '', rightCalf: ''
+    });
+  };
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-brand-text">Acompanhamento</h1>
-          <p className="text-brand-muted">Registre e acompanhe a evolução física dos alunos</p>
+          <p className="text-brand-muted">Registre e acompanhe a evolução física e nutricional dos alunos</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus size={20} />
-          Nova Avaliação
-        </button>
+        {activeTab === 'evolution' && (
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus size={20} />
+            Nova Avaliação
+          </button>
+        )}
       </header>
 
-      {/* Filters & Search */}
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-2 p-1 bg-brand-black/50 rounded-xl w-fit border border-brand-border">
+        <button
+          onClick={() => setActiveTab('evolution')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+            activeTab === 'evolution' ? 'bg-brand-green text-brand-black' : 'text-brand-muted hover:text-brand-text'
+          }`}
+        >
+          <Activity size={16} />
+          Avaliação Física
+        </button>
+        <button
+          onClick={() => setActiveTab('nutrition')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+            activeTab === 'nutrition' ? 'bg-brand-green text-brand-black' : 'text-brand-muted hover:text-brand-text'
+          }`}
+        >
+          <Utensils size={16} />
+          Nutrição
+        </button>
+      </div>
+
+      {activeTab === 'evolution' ? (
+        <>
+          {/* Filters & Search */}
       <div className="flex flex-col md:flex-row gap-4">
         <div className="relative flex-1">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-brand-muted">
@@ -150,6 +298,7 @@ export default function Evolution() {
                 <th className="px-6 py-4 text-xs font-semibold text-brand-muted uppercase tracking-wider text-center">Altura</th>
                 <th className="px-6 py-4 text-xs font-semibold text-brand-muted uppercase tracking-wider text-center">BF %</th>
                 <th className="px-6 py-4 text-xs font-semibold text-brand-muted uppercase tracking-wider text-center">IMC</th>
+                <th className="px-6 py-4 text-xs font-semibold text-brand-muted uppercase tracking-wider text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-border">
@@ -208,6 +357,31 @@ export default function Evolution() {
                           {imc}
                         </span>
                       </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => downloadEvolutionPDF(record)}
+                            className="p-2 rounded-lg bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-all font-bold"
+                            title="Baixar PDF"
+                          >
+                            <FileDown size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleEdit(record)}
+                            className="p-2 rounded-lg bg-brand-border text-brand-text hover:bg-brand-green hover:text-brand-black transition-all"
+                            title="Editar"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleSoftDelete(record.id)}
+                            className="p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+                            title="Excluir"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -239,12 +413,14 @@ export default function Evolution() {
                 <div>
                   <h3 className="text-xl font-bold text-brand-text flex items-center gap-2">
                     <TrendingUp className="text-brand-green" size={24} />
-                    Nova Avaliação Física
+                    {editingId ? 'Editar Avaliação' : 'Nova Avaliação Física'}
                   </h3>
-                  <p className="text-xs text-brand-muted mt-1">Insira as métricas mensais do aluno</p>
+                  <p className="text-xs text-brand-muted mt-1">
+                    {editingId ? 'Atualize as métricas do aluno' : 'Insira as métricas mensais do aluno'}
+                  </p>
                 </div>
                 <button
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={handleCloseModal}
                   disabled={submitting}
                   className="p-2 rounded-xl hover:bg-brand-border text-brand-muted transition-all"
                 >
@@ -252,7 +428,7 @@ export default function Evolution() {
                 </button>
               </div>
 
-              <form onSubmit={handleSave} className="p-6 space-y-6">
+              <form onSubmit={handleSave} className="p-6 space-y-6 overflow-y-auto max-h-[70vh] scrollbar-hide">
                 <div className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider mb-2">Aluno</label>
@@ -304,22 +480,149 @@ export default function Evolution() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider mb-2">Percentual de Gordura (BF %)</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-brand-green">
-                        <Activity size={16} />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider mb-2">BF %</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-brand-green">
+                          <Activity size={16} />
+                        </div>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={bodyFat}
+                          onChange={(e) => setBodyFat(e.target.value)}
+                          className="input-field w-full pl-10"
+                          placeholder="Ex: 15.5"
+                          required
+                          disabled={submitting}
+                        />
                       </div>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={bodyFat}
-                        onChange={(e) => setBodyFat(e.target.value)}
-                        className="input-field w-full pl-10"
-                        placeholder="Ex: 15.5"
-                        required
-                        disabled={submitting}
-                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider mb-2">Massa Muscular %</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-brand-green">
+                          <Activity size={16} />
+                        </div>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={muscleMass}
+                          onChange={(e) => setMuscleMass(e.target.value)}
+                          className="input-field w-full pl-10"
+                          placeholder="Opcional"
+                          disabled={submitting}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-brand-border">
+                    <h4 className="text-xs font-bold text-brand-green uppercase tracking-widest mb-4">Medidas Corporais (cm)</h4>
+                    
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-brand-muted uppercase mb-1">Tórax</label>
+                          <input
+                            type="number" step="0.1"
+                            value={measurements.chest}
+                            onChange={(e) => setMeasurements({...measurements, chest: e.target.value})}
+                            className="input-field w-full text-sm py-2"
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-brand-muted uppercase mb-1">Cintura</label>
+                          <input
+                            type="number" step="0.1"
+                            value={measurements.waist}
+                            onChange={(e) => setMeasurements({...measurements, waist: e.target.value})}
+                            className="input-field w-full text-sm py-2"
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-brand-muted uppercase mb-1">Quadril</label>
+                          <input
+                            type="number" step="0.1"
+                            value={measurements.hips}
+                            onChange={(e) => setMeasurements({...measurements, hips: e.target.value})}
+                            className="input-field w-full text-sm py-2"
+                            disabled={submitting}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-brand-muted uppercase mb-1">Braço Esquerdo</label>
+                          <input
+                            type="number" step="0.1"
+                            value={measurements.leftArm}
+                            onChange={(e) => setMeasurements({...measurements, leftArm: e.target.value})}
+                            className="input-field w-full text-sm py-2"
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-brand-muted uppercase mb-1">Braço Direito</label>
+                          <input
+                            type="number" step="0.1"
+                            value={measurements.rightArm}
+                            onChange={(e) => setMeasurements({...measurements, rightArm: e.target.value})}
+                            className="input-field w-full text-sm py-2"
+                            disabled={submitting}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-brand-muted uppercase mb-1">Coxa Esquerda</label>
+                          <input
+                            type="number" step="0.1"
+                            value={measurements.leftThigh}
+                            onChange={(e) => setMeasurements({...measurements, leftThigh: e.target.value})}
+                            className="input-field w-full text-sm py-2"
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-brand-muted uppercase mb-1">Coxa Direita</label>
+                          <input
+                            type="number" step="0.1"
+                            value={measurements.rightThigh}
+                            onChange={(e) => setMeasurements({...measurements, rightThigh: e.target.value})}
+                            className="input-field w-full text-sm py-2"
+                            disabled={submitting}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-brand-muted uppercase mb-1">Panturrilha Esq.</label>
+                          <input
+                            type="number" step="0.1"
+                            value={measurements.leftCalf}
+                            onChange={(e) => setMeasurements({...measurements, leftCalf: e.target.value})}
+                            className="input-field w-full text-sm py-2"
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-brand-muted uppercase mb-1">Panturrilha Dir.</label>
+                          <input
+                            type="number" step="0.1"
+                            value={measurements.rightCalf}
+                            onChange={(e) => setMeasurements({...measurements, rightCalf: e.target.value})}
+                            className="input-field w-full text-sm py-2"
+                            disabled={submitting}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -327,7 +630,7 @@ export default function Evolution() {
                 <div className="pt-4 flex items-center justify-end gap-3 border-t border-brand-border">
                   <button
                     type="button"
-                    onClick={() => setIsModalOpen(false)}
+                    onClick={handleCloseModal}
                     disabled={submitting}
                     className="btn-secondary"
                   >
@@ -343,7 +646,7 @@ export default function Evolution() {
                     ) : (
                       <Save size={20} />
                     )}
-                    Salvar Avaliação
+                    {editingId ? 'Salvar Alterações' : 'Salvar Avaliação'}
                   </button>
                 </div>
               </form>
@@ -351,6 +654,10 @@ export default function Evolution() {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </>
+  ) : (
+    <NutritionPanel />
+  )}
+</div>
   );
 }
