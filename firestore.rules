@@ -1,145 +1,128 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
+
+    // =============================================================
+    // 1. FUNÇÕES DE BASE (SEGURANÇA CENTRALIZADA)
+    // =============================================================
+
+    // Verifica se há um usuário autenticado no Firebase Auth
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    // Identifica se o usuário logado é o administrador master do sistema
+    // Isso ignora qualquer permissão de tenant e dá acesso total.
+    function isMaster() {
+      return isAuthenticated() && 
+             request.auth.token.email.lower() == "admin@admin.com";
     }
 
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    // Obtém o tenantId do documento do usuário logado
+    function getMyTenantId() {
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(userPath) ? get(userPath).data.tenantId : "NO_TENANT";
     }
 
-    function hasRole(roles) {
-      return isAuthenticated() && (
-        request.auth.token.email == "admin@admin.com" ||
-        (request.auth.token.email == "willianrpsdesigner@gmail.com" && request.auth.token.email_verified == true) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role in roles)
+    // Obtém o cargo do usuário logado
+    function getRole() {
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(userPath) ? get(userPath).data.role : "GUEST";
+    }
+
+    // Verifica se o usuário pertence à academia (tenant) correta
+    function belongsToTenant(docData) {
+      return isMaster() || (
+        isAuthenticated() && 
+        docData.tenantId == getMyTenantId()
       );
     }
 
-    function isAdmin() {
-      return hasRole(['OWNER', 'ADMIN']);
-    }
+    // Papéis de acesso
+    function isOwner() { return isMaster() || getRole() == 'OWNER'; }
+    function isAdmin() { return isMaster() || getRole() in ['OWNER', 'ADMIN']; }
+    function isInstructor() { return isMaster() || getRole() in ['OWNER', 'ADMIN', 'INSTRUCTOR']; }
+    function isStudent() { return isMaster() || getRole() == 'STUDENT'; }
 
-    function isInstructor() {
-      return hasRole(['OWNER', 'ADMIN', 'INSTRUCTOR']);
-    }
+    // =============================================================
+    // 2. REGRAS POR COLEÇÃO
+    // =============================================================
 
-    function getTenantId() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? getUserData().tenantId : null;
-    }
-
-    function belongsToTenant(data) {
-      return isAuthenticated() && (
-        request.auth.token.email == "admin@admin.com" ||
-        data.tenantId == getTenantId()
-      );
-    }
-
-    // ===============================================================
-    // Domain Validators
-    // ===============================================================
-    function isValidTenant(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.slug is string && data.slug.size() > 0 && data.slug.size() < 50 &&
-             data.planType in ['BASIC', 'PRO', 'ENTERPRISE'];
-    }
-
-    function isValidUser(data) {
-      return data.tenantId is string &&
-             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.role in ['OWNER', 'ADMIN', 'INSTRUCTOR', 'STUDENT'];
-    }
-
-    function isValidStudent(data) {
-      return data.tenantId is string &&
-             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.status in ['ACTIVE', 'INACTIVE', 'SUSPENDED', 'DEFAULTING'];
-    }
-
-    // ===============================================================
-    // Rules
-    // ===============================================================
-
+    // COLEÇÃO: tenants (Academias)
     match /tenants/{tenantId} {
-      allow read: if isAuthenticated() && (isAdmin() || getTenantId() == tenantId);
-      allow create: if isAuthenticated() && isValidTenant(request.resource.data);
-      allow update: if isAuthenticated() && isAdmin() && isValidTenant(request.resource.data);
+      // O Master pode listar todas. Gestores veem apenas a sua.
+      allow list: if isMaster();
+      allow get:  if isMaster() || (isAuthenticated() && getMyTenantId() == tenantId);
+      
+      // Criar academia é livre para o onboarding inicial ou para o Master
+      allow create: if isAuthenticated();
+      
+      // Apenas Admins da própria academia ou Master podem editar
+      allow update: if isMaster() || (isAdmin() && getMyTenantId() == tenantId);
+      allow delete: if false; // Soft-delete gerenciado por flag
     }
 
+    // COLEÇÃO: users (Perfis de Sistema)
     match /users/{userId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow read:   if isMaster() || request.auth.uid == userId;
       allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isAuthenticated() && request.auth.uid == userId &&
-                    (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'tenantId']));
+      allow update: if isMaster() || (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'tenantId']));
+      allow delete: if false;
     }
 
+    // COLEÇÃO: students (Alunos)
     match /students/{studentId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isInstructor() && belongsToTenant(request.resource.data) && isValidStudent(request.resource.data);
-      allow update: if isAuthenticated() && (
-        (isInstructor() && belongsToTenant(request.resource.data)) ||
-        (!resource.data.keys().contains('userId') && request.resource.data.userId == request.auth.uid && 
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userId', 'updatedAt']))
-      ) && isValidStudent(request.resource.data);
+      allow read: if isInstructor() && belongsToTenant(resource.data) || 
+                  (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow write: if isInstructor() && belongsToTenant(request.resource.data || resource.data);
     }
 
-    match /plans/{planId} {
-      allow read: if isAuthenticated() && belongsToTenant(resource.data);
-      allow write: if isAuthenticated() && isAdmin() && belongsToTenant(request.resource.data);
+    // COLEÇÃO: checkins
+    match /checkins/{id} {
+      allow read:  if isInstructor() && belongsToTenant(resource.data);
+      allow write: if isInstructor() && belongsToTenant(request.resource.data || resource.data);
     }
 
-    match /checkins/{checkinId} {
-      allow read: if isAuthenticated() && belongsToTenant(resource.data);
-      allow create: if isAuthenticated() && isInstructor() && belongsToTenant(request.resource.data);
+    // COLEÇÃO: evolution_records (Acompanhamento)
+    match /evolution_records/{id} {
+      allow read: if isInstructor() && belongsToTenant(resource.data) || 
+                  (isAuthenticated() && exists(/databases/$(database)/documents/students/$(resource.data.studentId)) && 
+                   get(/databases/$(database)/documents/students/$(resource.data.studentId)).data.userId == request.auth.uid);
+      allow write: if isInstructor() && belongsToTenant(request.resource.data || resource.data);
     }
 
-    match /evolution_records/{recordId} {
-      allow read: if isAuthenticated() && (
-        (isInstructor() && belongsToTenant(resource.data)) || 
-        (exists(/databases/$(database)/documents/students/$(resource.data.studentId)) && 
-         get(/databases/$(database)/documents/students/$(resource.data.studentId)).data.userId == request.auth.uid)
-      );
-      allow create: if isAuthenticated() && isInstructor() && belongsToTenant(request.resource.data);
-      allow update, delete: if isAuthenticated() && isInstructor() && belongsToTenant(resource.data);
+    // COLEÇÃO: trainingPlans (Planos Ativos dos Alunos)
+    match /trainingPlans/{id} {
+      allow read:  if belongsToTenant(resource.data);
+      allow write: if isInstructor() && belongsToTenant(request.resource.data || resource.data);
     }
 
-    match /workoutTemplates/{templateId} {
-      allow read: if isAuthenticated() && belongsToTenant(resource.data);
-      allow write: if isAuthenticated() && isInstructor() && belongsToTenant(request.resource.data);
+    // COLEÇÃO: workoutTemplates (Biblioteca de Treinos)
+    match /workoutTemplates/{id} {
+      allow read:  if belongsToTenant(resource.data);
+      allow write: if isInstructor() && belongsToTenant(request.resource.data || resource.data);
     }
 
-    match /trainingPlans/{planId} {
-      allow read: if isAuthenticated() && (
-        (isInstructor() && belongsToTenant(resource.data)) || 
-        isOwner(resource.data.studentUserId)
-      );
-      allow write: if isAuthenticated() && isInstructor() && belongsToTenant(request.resource.data);
+    // COLEÇÃO: payments (Financeiro)
+    match /payments/{id} {
+      allow read: if isAdmin() && belongsToTenant(resource.data) || 
+                  (isAuthenticated() && exists(/databases/$(database)/documents/students/$(resource.data.studentId)) && 
+                   get(/databases/$(database)/documents/students/$(resource.data.studentId)).data.userId == request.auth.uid);
+      allow write: if isAdmin() && belongsToTenant(request.resource.data || resource.data);
     }
 
-    match /payments/{paymentId} {
-      allow read: if isAuthenticated() && (
-        (isAdmin() && belongsToTenant(resource.data)) || 
-        (exists(/databases/$(database)/documents/students/$(resource.data.studentId)) && 
-         get(/databases/$(database)/documents/students/$(resource.data.studentId)).data.userId == request.auth.uid)
-      );
-      allow write: if isAuthenticated() && isAdmin() && belongsToTenant(request.resource.data);
+    // COLEÇÃO: diet_plans (Nutrição)
+    match /diet_plans/{id} {
+      allow read: if isInstructor() && belongsToTenant(resource.data) || 
+                   (isAuthenticated() && exists(/databases/$(database)/documents/students/$(resource.data.studentId)) && 
+                    get(/databases/$(database)/documents/students/$(resource.data.studentId)).data.userId == request.auth.uid);
+      allow write: if isInstructor() && belongsToTenant(request.resource.data || resource.data);
     }
 
-    match /diet_plans/{planId} {
-      allow read: if isAuthenticated() && (
-        (isInstructor() && belongsToTenant(resource.data)) || 
-        (exists(/databases/$(database)/documents/students/$(resource.data.studentId)) && 
-         get(/databases/$(database)/documents/students/$(resource.data.studentId)).data.userId == request.auth.uid)
-      );
-      allow write: if isAuthenticated() && isInstructor() && belongsToTenant(request.resource.data);
+    // COLEÇÃO: plans (Planos de Preço da Academia)
+    match /plans/{id} {
+      allow read:  if belongsToTenant(resource.data);
+      allow write: if isAdmin() && belongsToTenant(request.resource.data || resource.data);
     }
   }
 }

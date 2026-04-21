@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { Dumbbell, LogIn, Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Dumbbell, LogIn, Mail, Lock, Eye, EyeOff, ArrowLeft, AlertTriangle, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 
 const loginSchema = z.object({
@@ -18,7 +18,8 @@ type LoginForm = z.infer<typeof loginSchema>;
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { user, login, initialized } = useAuthStore();
+  const [deletingZombie, setDeletingZombie] = useState(false);
+  const { user, login, initialized, profileMissing, deleteZombieAccount } = useAuthStore();
   const navigate = useNavigate();
 
   React.useEffect(() => {
@@ -52,6 +53,22 @@ export default function Login() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteZombieAccount = async () => {
+    setDeletingZombie(true);
+    try {
+      await deleteZombieAccount();
+      toast.success('Conta reiniciada! Você já pode se cadastrar novamente.');
+    } catch (error: any) {
+      if (error.code === 'auth/requires-recent-login') {
+        toast.error('Por segurança, faça login novamente antes de excluir a conta.');
+      } else {
+        toast.error('Erro ao reiniciar conta. Tente fazer login primeiro.');
+      }
+    } finally {
+      setDeletingZombie(false);
     }
   };
 
@@ -169,6 +186,38 @@ export default function Login() {
           </div>
 
           <div className="card bg-brand-dark/50 backdrop-blur-md border-brand-border/40 p-6 xl:p-8">
+            {/* Zombie account recovery banner */}
+            {profileMissing && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-5 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl"
+              >
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="text-amber-400 shrink-0 mt-0.5" size={18} />
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-amber-300">Cadastro incompleto detectado</p>
+                    <p className="text-xs text-amber-400/80 mt-1">
+                      Seu e-mail já existe no sistema mas o perfil não foi criado corretamente. 
+                      Clique abaixo para limpar e tentar se cadastrar novamente.
+                    </p>
+                    <button
+                      onClick={handleDeleteZombieAccount}
+                      disabled={deletingZombie}
+                      className="mt-3 flex items-center gap-2 text-xs font-bold bg-amber-500 text-brand-black px-3 py-1.5 rounded-lg hover:bg-amber-400 transition-colors disabled:opacity-60"
+                    >
+                      {deletingZombie ? (
+                        <div className="w-3.5 h-3.5 border-2 border-brand-black border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <RefreshCw size={13} />
+                      )}
+                      Reiniciar Cadastro
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 xl:space-y-6">
               <div>
                 <label className="block text-xs xl:text-sm font-medium text-brand-muted mb-1 xl:mb-2">E-mail</label>

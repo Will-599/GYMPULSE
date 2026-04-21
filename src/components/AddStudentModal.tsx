@@ -83,7 +83,10 @@ export default function AddStudentModal({ isOpen, onClose, onSuccess, student }:
   if (!isOpen) return null;
 
   const onSubmit = async (data: StudentFormData) => {
-    if (!tenant) return;
+    if (!tenant) {
+      toast.error('Erro de sincronização: Academia não identificada. Tente recarregar a página.');
+      return;
+    }
     setLoading(true);
 
     try {
@@ -111,19 +114,26 @@ export default function AddStudentModal({ isOpen, onClose, onSuccess, student }:
           updatedAt: serverTimestamp(),
         };
 
-        await addDoc(collection(db, 'students'), studentData);
-        
-        toast.success(`Aluno cadastrado! Código: ${accessId}`, { 
-          duration: 10000,
-          icon: '🔑'
-        });
+        try {
+          await addDoc(collection(db, 'students'), studentData);
+          toast.success(`Aluno cadastrado! Código: ${accessId}`, { 
+            duration: 10000,
+            icon: '🔑'
+          });
+        } catch (dbError) {
+          console.error('Database Error:', dbError);
+          toast.error('Erro de permissão ou conexão ao salvar no banco de dados.');
+          throw dbError;
+        }
       }
       
       onSuccess();
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving student:', error);
-      toast.error(student ? 'Erro ao atualizar aluno' : 'Erro ao cadastrar aluno');
+      if (!error.message.includes('permission-denied')) {
+        toast.error(student ? 'Erro ao atualizar aluno' : 'Erro ao cadastrar aluno');
+      }
     } finally {
       setLoading(false);
     }

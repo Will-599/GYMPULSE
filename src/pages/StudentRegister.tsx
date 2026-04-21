@@ -99,6 +99,7 @@ export default function StudentRegister() {
       currentStep = 4; // Student Record Linking
       await updateDoc(doc(db, 'students', studentDoc.id), {
         userId: firebaseUser.uid,
+        accessId: data.accessId.toUpperCase().trim(),
         updatedAt: new Date(),
       });
 

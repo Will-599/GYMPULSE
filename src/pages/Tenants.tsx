@@ -5,7 +5,7 @@ import AddTenantModal from '../components/AddTenantModal';
 import toast from 'react-hot-toast';
 
 export default function Tenants() {
-  const { tenants, loading, fetchTenants, deleteTenant, updateTenant } = useTenantStore();
+  const { tenants, loading, fetchTenants, softDeleteTenant, updateTenant } = useTenantStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<any>(null);
 
@@ -20,10 +20,10 @@ export default function Tenants() {
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (confirm(`Tem certeza que deseja excluir a academia ${name}? Todos os dados vinculados serão perdidos.`)) {
+    if (confirm(`Tem certeza que deseja mover a academia ${name} para a lixeira?`)) {
       try {
-        await deleteTenant(id);
-        toast.success('Academia excluída com sucesso');
+        await softDeleteTenant(id);
+        toast.success('Academia movida para a lixeira');
       } catch (error) {
         toast.error('Erro ao excluir academia');
       }

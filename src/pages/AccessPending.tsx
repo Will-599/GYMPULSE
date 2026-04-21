@@ -2,9 +2,17 @@ import React from 'react';
 import { ShieldAlert, LogOut, MessageCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { motion } from 'motion/react';
+import { useNavigate } from 'react-router-dom';
 
 export default function AccessPending() {
   const { logout, user, tenant } = useAuthStore();
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (!user) {
+      navigate('/');
+    }
+  }, [user, navigate]);
 
   const isStudent = user?.role === 'STUDENT';
 
@@ -28,7 +36,7 @@ export default function AccessPending() {
 
         <div className="space-y-4">
           <button 
-            onClick={() => window.open('https://wa.me/5500000000000', '_blank')}
+            onClick={() => window.open('https://wa.me/5581971072269', '_blank')}
             className="w-full btn-primary flex items-center justify-center gap-2"
           >
             <MessageCircle size={20} />
@@ -36,7 +44,9 @@ export default function AccessPending() {
           </button>
           
           <button 
-            onClick={() => logout()}
+            onClick={async () => {
+              await logout();
+            }}
             className="w-full btn-secondary flex items-center justify-center gap-2"
           >
             <LogOut size={20} />

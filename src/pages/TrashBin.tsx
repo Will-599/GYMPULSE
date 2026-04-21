@@ -1,21 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, RotateCcw, Users, Dumbbell, Search, Filter, AlertCircle, CreditCard, Utensils, Activity } from 'lucide-react';
+import { Trash2, RotateCcw, Users, Dumbbell, Search, Filter, AlertCircle, CreditCard, Utensils, Activity, Building2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuthStore } from '../store/authStore';
 import { useStudentStore } from '../store/studentStore';
 import { useWorkoutStore } from '../store/workoutStore';
 import { usePaymentStore } from '../store/paymentStore';
+import { useTenantStore } from '../store/tenantStore';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 
-type TrashCategory = 'students' | 'plans' | 'templates' | 'payments' | 'nutrition' | 'evolution';
+type TrashCategory = 'students' | 'plans' | 'templates' | 'payments' | 'nutrition' | 'evolution' | 'tenants';
 
 export default function TrashBin() {
   const { tenant } = useAuthStore();
   const { students, fetchStudents, trashedStudents, fetchTrashedStudents, restoreStudent } = useStudentStore();
   const { trashedPlans, fetchTrashedPlans, restorePlan, trashedTemplates, fetchTrashedTemplates, restoreTemplate } = useWorkoutStore();
   const { trashedPayments, fetchTrashedPayments, restorePayment } = usePaymentStore();
+  const { trashedTenants, fetchTrashedTenants, restoreTenant } = useTenantStore();
   
   const [activeCategory, setActiveCategory] = useState<TrashCategory>('students');
   const [searchTerm, setSearchTerm] = useState('');
@@ -29,6 +31,11 @@ export default function TrashBin() {
       const unsubPlans = fetchTrashedPlans(tenant.id);
       const unsubTemplates = fetchTrashedTemplates(tenant.id);
       const unsubPayments = fetchTrashedPayments(tenant.id);
+      let unsubTenants = () => {};
+
+      if (tenant.slug === 'master') {
+        unsubTenants = fetchTrashedTenants();
+      }
       
       const qDiets = query(
         collection(db, 'diet_plans'),
@@ -55,9 +62,10 @@ export default function TrashBin() {
         unsubPayments();
         unsubDiets();
         unsubEvolutions();
+        unsubTenants();
       };
     }
-  }, [tenant, fetchTrashedStudents, fetchTrashedPlans, fetchTrashedTemplates, fetchTrashedPayments]);
+  }, [tenant, fetchTrashedStudents, fetchTrashedPlans, fetchTrashedTemplates, fetchTrashedPayments, fetchTrashedTenants]);
 
   const handleRestore = async (id: string, category: TrashCategory) => {
     try {
@@ -77,6 +85,7 @@ export default function TrashBin() {
           deletedAt: null
         });
       }
+      else if (category === 'tenants') await restoreTenant(id);
       
       toast.success('Item restaurado com sucesso!');
     } catch (error) {
@@ -105,7 +114,7 @@ export default function TrashBin() {
           description: `Peso: ${ev.weight}kg | BF: ${ev.bodyFatPercent}%`
         };
       });
-    }
+    } else if (activeCategory === 'tenants') items = trashedTenants;
 
     return items.filter(item => {
       const search = searchTerm.toLowerCase();
@@ -176,6 +185,17 @@ export default function TrashBin() {
           <Activity size={16} />
           Evolução ({trashedEvolutions.length})
         </button>
+        {tenant?.slug === 'master' && (
+          <button
+            onClick={() => setActiveCategory('tenants')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+              activeCategory === 'tenants' ? 'bg-brand-green text-brand-black' : 'text-brand-muted hover:text-brand-text'
+            }`}
+          >
+            <Building2 size={16} />
+            Academias ({trashedTenants.length})
+          </button>
+        )}
       </div>
 
       {/* Search */}

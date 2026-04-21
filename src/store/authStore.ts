@@ -11,12 +11,14 @@ interface AuthState {
   student: Student | null;
   loading: boolean;
   initialized: boolean;
+  profileMissing: boolean;
   setUser: (user: User | null) => void;
   setTenant: (tenant: Tenant | null) => void;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string, gymName: string) => Promise<void>;
   logout: () => Promise<void>;
   initialize: () => void;
+  deleteZombieAccount: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -25,8 +27,21 @@ export const useAuthStore = create<AuthState>((set) => ({
   student: null,
   loading: true,
   initialized: false,
+  profileMissing: false,
   setUser: (user) => set({ user }),
   setTenant: (tenant) => set({ tenant }),
+  deleteZombieAccount: async () => {
+    try {
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        await currentUser.delete();
+      }
+      set({ user: null, tenant: null, student: null, profileMissing: false });
+    } catch (error) {
+      console.error('Error deleting zombie account:', error);
+      throw error;
+    }
+  },
   login: async (email, password) => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
@@ -36,10 +51,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
   register: async (email, password, name, gymName) => {
+    let firebaseUser = null;
     try {
-      const { user: firebaseUser } = await createUserWithEmailAndPassword(auth, email, password);
+      // Step 1: Create Auth User
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      firebaseUser = result.user;
       
-      // Create tenant
+      // Step 2: Critical Delay
+      // Small delay to ensure auth token is fully synced before next Firestore call
+      // This prevents "permission-denied" errors during immediate subsequent writes
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Step 3: Create tenant
       const tenantRef = doc(collection(db, 'tenants'));
       const tenantData: Tenant = {
         id: tenantRef.id,
@@ -49,7 +72,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         phone: '',
         address: '',
         planType: 'PRO',
-        isActive: false,
+        isActive: false, // Start as inactive, admin must approve
         createdAt: new Date(),
         updatedAt: new Date(),
         settings: {}
@@ -58,10 +81,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       try {
         await setDoc(tenantRef, tenantData);
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `tenants/${tenantRef.id}`);
+        console.error('FIRESTORE ERROR: Failed to create tenant doc:', error);
+        throw error;
       }
 
-      // Create user
+      // Step 4: Create user profile
       const userRef = doc(db, 'users', firebaseUser.uid);
       const userData: User = {
         id: firebaseUser.uid,
@@ -69,7 +93,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         name,
         email,
         role: 'OWNER',
-        isActive: true,
+        isActive: true, // Internal user active status
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -77,19 +101,31 @@ export const useAuthStore = create<AuthState>((set) => ({
       try {
         await setDoc(userRef, userData);
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `users/${firebaseUser.uid}`);
+        console.error('FIRESTORE ERROR: Failed to create user doc:', error);
+        throw error;
       }
       
       set({ user: userData, tenant: tenantData });
-    } catch (error) {
-      console.error('Registration error:', error);
+    } catch (error: any) {
+      console.error('Registration error details:', error);
+      
+      // Cleanup: Delete auth user if Firestore records failed to create
+      // This prevents "zombie accounts" (Auth exists but no profile)
+      if (firebaseUser && error.code !== 'auth/email-already-in-use') {
+        try {
+          await firebaseUser.delete();
+        } catch (deleteError) {
+          console.error('Failed to cleanup auth user:', deleteError);
+        }
+      }
+      
       throw error;
     }
   },
   logout: async () => {
     try {
       await signOut(auth);
-      set({ user: null, tenant: null, student: null });
+      set({ user: null, tenant: null, student: null, profileMissing: false });
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -195,8 +231,8 @@ export const useAuthStore = create<AuthState>((set) => ({
             
             set({ user: userData, tenant: tenantData });
           } else {
-            // Profile missing for non-admin email
-            set({ user: null, tenant: null, student: null });
+            // Profile missing for non-admin email — mark as zombie account
+            set({ user: null, tenant: null, student: null, profileMissing: true });
           }
         } catch (error) {
           console.error('Auth initialization error:', error);

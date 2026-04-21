@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { Dumbbell, UserPlus, Mail, Lock, Building2, User, ArrowLeft } from 'lucide-react';
+import { Dumbbell, UserPlus, Mail, Lock, Building2, User, ArrowLeft, AlertTriangle, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 
 const registerSchema = z.object({
@@ -19,7 +19,8 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function Register() {
   const [loading, setLoading] = useState(false);
-  const { user, register: registerUser, initialized } = useAuthStore();
+  const [deletingZombie, setDeletingZombie] = useState(false);
+  const { user, register: registerUser, initialized, profileMissing, deleteZombieAccount } = useAuthStore();
   const navigate = useNavigate();
 
   React.useEffect(() => {
@@ -43,16 +44,32 @@ export default function Register() {
       toast.success('Conta criada com sucesso! Bem-vindo ao GymPulse.');
       navigate('/app/dashboard');
     } catch (error: any) {
-      console.error('Registration error:', error);
+      console.error('Registration error full details:', error);
       if (error.code === 'auth/operation-not-allowed') {
         toast.error('O cadastro por e-mail/senha não está habilitado no Firebase Console.');
       } else if (error.code === 'auth/email-already-in-use') {
         toast.error('Este e-mail já está em uso por outra conta.');
+      } else if (error.code === 'permission-denied' || (error.message && error.message.includes('permission-denied'))) {
+        toast.error('Erro de permissão no banco de dados. Entre em contato com o suporte.');
+        console.error('FIRESTORE PERMISSION DENIED - Rules may not be deployed or token not synced.');
       } else {
-        toast.error('Erro ao criar conta. Tente novamente mais tarde.');
+        const msg = error.message ? error.message.substring(0, 120) : 'Erro desconhecido';
+        toast.error(`Erro: ${msg}`);
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteZombieAccount = async () => {
+    setDeletingZombie(true);
+    try {
+      await deleteZombieAccount();
+      toast.success('Conta reiniciada! Você já pode tentar o cadastro novamente.');
+    } catch (error: any) {
+      toast.error('Erro ao reiniciar conta. Tente fazer login e usar o botão de recuperação no login.');
+    } finally {
+      setDeletingZombie(false);
     }
   };
 
@@ -84,6 +101,37 @@ export default function Register() {
         </div>
 
         <div className="card">
+          {profileMissing && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-5 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl"
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="text-amber-400 shrink-0 mt-0.5" size={18} />
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-amber-300">Cadastro pendente detectado</p>
+                  <p className="text-xs text-amber-400/80 mt-1">
+                    Vimos que você tentou se cadastrar recentemente mas o processo não foi concluído. 
+                    Clique abaixo para limpar o estado anterior e tentar novamente.
+                  </p>
+                  <button
+                    onClick={handleDeleteZombieAccount}
+                    disabled={deletingZombie}
+                    className="mt-3 flex items-center gap-2 text-xs font-bold bg-amber-500 text-brand-black px-3 py-1.5 rounded-lg hover:bg-amber-400 transition-colors disabled:opacity-60"
+                  >
+                    {deletingZombie ? (
+                      <div className="w-3.5 h-3.5 border-2 border-brand-black border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <RefreshCw size={13} />
+                    )}
+                    Reiniciar Cadastro
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-brand-muted mb-1">Seu Nome</label>
@@ -175,3 +223,4 @@ export default function Register() {
     </div>
   );
 }
+
